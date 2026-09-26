@@ -5,6 +5,7 @@ typedef enum {
 	AST_NUM,
 	AST_STR,
 	AST_STRING,
+	AST_REGEX,
 	AST_VAR,
 	AST_ASSIGN,
 	AST_ADD,
@@ -15,7 +16,8 @@ typedef enum {
 	AST_IF,
 	AST_WHILE,
 	AST_EQ,
-	AST_LT
+	AST_LT,
+	AST_MATCH
 } ASTNodeType;
 
 // 前方宣言
@@ -36,6 +38,7 @@ struct ASTNode {
 ASTNode* make_num_node(int val);
 ASTNode* make_str_node(char* str_val);
 ASTNode* make_string_node(char* str);
+ASTNode* make_regex_node(char* pattern);
 ASTNode* make_var_node(char* name);
 ASTNode* make_binop_node(ASTNodeType type, ASTNode* left, ASTNode* right);
 ASTNode* make_print_node(ASTNode* arg);

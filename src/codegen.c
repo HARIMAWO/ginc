@@ -25,6 +25,9 @@ LLVMValueRef generate_node(ASTNode* node) {
         case AST_STRING:
             return LLVMBuildGlobalStringPtr(builder, node->str_val, "strtmp");
 
+        case AST_REGEX:
+            return LLVMBuildGlobalStringPtr(builder, node->str_val, "regextmp");
+
         case AST_VAR: {
             LLVMValueRef var = LLVMGetNamedGlobal(module, node->var_name);
             if (!var) {
@@ -116,6 +119,23 @@ LLVMValueRef generate_node(ASTNode* node) {
             if (node->left) generate_node(node->left);
             else if (node->then_body) generate_node(node->then_body);
             return NULL;
+        }
+
+        case AST_MATCH: {
+            LLVMValueRef lhs = generate_node(node->left);
+            LLVMValueRef rhs = generate_node(node->right);
+
+            LLVMTypeRef ptr_type = LLVMPointerType(LLVMInt8TypeInContext(context), 0);
+            LLVMTypeRef param_types[] = { ptr_type, ptr_type };
+            LLVMTypeRef match_func_type = LLVMFunctionType(LLVMInt32TypeInContext(context), param_types, 2, 0);
+
+            LLVMValueRef match_func = LLVMGetNamedFunction(module, "ginc_regex_match");
+            if (!match_func) {
+                match_func = LLVMAddFunction(module, "ginc_regex_match", match_func_type);
+            }
+
+            LLVMValueRef args[] = { lhs, rhs };
+            return LLVMBuildCall2(builder, match_func_type, match_func, args, 2, "matchtmp");
         }
 
         case AST_EQ:
@@ -227,6 +247,9 @@ void generate_code(ASTNode* root) {
 
     char* ginc_str_concat(char const* s1, char const* s2);
     LLVMAddSymbol("ginc_str_concat", (void*)ginc_str_concat);
+
+    int ginc_regex_match(char const* str, char const* pattern);
+    LLVMAddSymbol("ginc_regex_match", (void*)ginc_regex_match);
 
     LLVMExecutionEngineRef engine;
     LLVMLinkInMCJIT();

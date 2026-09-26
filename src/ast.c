@@ -23,6 +23,13 @@ ASTNode* make_string_node(char* str) {
 	return node;
 }
 
+ASTNode* make_regex_node(char* pattern) {
+	ASTNode* node = malloc(sizeof(ASTNode));
+	node->type = AST_REGEX;
+	node->str_val = pattern;
+	return node;
+}
+
 ASTNode* make_var_node(char* name) {
 	ASTNode* node = malloc(sizeof(ASTNode));
 	node->type = AST_VAR;
@@ -79,6 +86,7 @@ void print_ast(ASTNode* node, int depth) {
 		case AST_NUM:    printf("NUM(%d)\n", node->val); break;
 		case AST_STR:    printf("STR(\"%s\")\n", node->var_name); break;
 		case AST_STRING: printf("STR(\"%s\")\n", node->str_val); break;
+		case AST_REGEX:  printf("REGEX(/%s/)\n", node->str_val); break;
 		case AST_VAR:    printf("VAR(%s)\n", node->var_name); break;
 		case AST_ASSIGN: printf("=\n"); break;
 		case AST_ADD:    printf("+\n"); break;
@@ -90,10 +98,11 @@ void print_ast(ASTNode* node, int depth) {
 		case AST_WHILE:  printf("WHILE\n"); break;
 		case AST_EQ:     printf("==\n"); break;
 		case AST_LT:     printf("<\n"); break;
+		case AST_MATCH:  printf("=~\n"); break;
 	}
 	
 	// 子ノードの再帰表示
-	if (node->type == AST_SEQ || node->type == AST_ASSIGN || node->type == AST_ADD || node->type == AST_SUB || node->type == AST_EQ || node->type == AST_LT) {
+	if (node->type == AST_SEQ || node->type == AST_ASSIGN || node->type == AST_ADD || node->type == AST_SUB || node->type == AST_EQ || node->type == AST_LT || node->type == AST_MATCH) {
 		print_ast(node->left, depth + 1);
 		print_ast(node->right, depth + 1);
 	} else if (node->type == AST_PRINT || node->type == AST_BLOCK) {

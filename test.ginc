@@ -1,0 +1,12 @@
+// test.ginc を作成して以下の内容を保存
+var msg = "GINC from File!";
+print(msg);
+
+var count = 1;
+while (count < 4) {
+    count = count + 1;
+}
+print(count);
+
+// varを使わずに未宣言変数に代入しようとしたらエラーになるかのテスト（最初はコメントアウトしておく）
+// undeclared_var = 100;

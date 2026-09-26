@@ -1,6 +1,20 @@
+#include <regex.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+int ginc_regex_match(char const* const str, char const* const pattern) {
+	regex_t regex;
+	int ret = 0;
+
+	if (regcomp(&regex, pattern, REG_EXTENDED | REG_NOSUB) == 0) {
+		if (regexec(&regex, str, 0, NULL, 0) == 0) {
+			ret = 1;
+		}
+		regfree(&regex);
+	}
+	return ret;
+}
 
 char* ginc_str_concat(char const* const s1, char const* const s2) {
 	size_t const len1 = strlen(s1);

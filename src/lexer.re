@@ -25,6 +25,7 @@ int yylex() {
         NUM = [0-9]+;
         IDENT = [a-zA-Z_][a-zA-Z0-9_]*;
         STR = "\"" [^"\x00\n]* "\"";
+        REGEX = "/" [^/\x00\n]+ "/";
 
         * { printf("Ga! (Lex Error): Unknown token\n"); exit(1); }
         "\x00" { return 0; }
@@ -40,6 +41,12 @@ int yylex() {
             yylval.str = strndup(tok + 1, cursor - tok - 2);
             return T_STRING;
         }
+        REGEX {
+            // 前後のスラッシュを除外して複製
+            yylval.str = strndup(tok + 1, cursor - tok - 2);
+            return T_REGEX;
+        }
+        "=~" { return T_MATCH; }
         "if" { return T_IF; }
         "else" { return T_ELSE; }
         "while" { return T_WHILE; }
