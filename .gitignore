@@ -4,3 +4,4 @@ ginc
 src/lexer.c
 src/parser.c
 src/parser.h
+*.core
