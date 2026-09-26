@@ -11,7 +11,7 @@ extern ASTNode* root_node;
 
 int main(int argc, char **argv) {
     // パースするソースコード
-    const char* source = "count = 0; while (count < 5) { count = count + 1; print(count); } if (count == 5) { print(100); }";
+    const char* source = "msg = \"Hello \" + \"GINC!\"; print(msg); count = 10 + 20; print(count);";
     cursor = source;
     limit = source + strlen(source);
 

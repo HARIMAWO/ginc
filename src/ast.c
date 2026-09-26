@@ -9,6 +9,20 @@ ASTNode* make_num_node(int val) {
 	return node;
 }
 
+ASTNode* make_str_node(char* str_val) {
+	ASTNode* node = malloc(sizeof(ASTNode));
+	node->type = AST_STR;
+	node->var_name = str_val;
+	return node;
+}
+
+ASTNode* make_string_node(char* str) {
+	ASTNode* node = malloc(sizeof(ASTNode));
+	node->type = AST_STRING;
+	node->str_val = str;
+	return node;
+}
+
 ASTNode* make_var_node(char* name) {
 	ASTNode* node = malloc(sizeof(ASTNode));
 	node->type = AST_VAR;
@@ -63,6 +77,8 @@ void print_ast(ASTNode* node, int depth) {
 	
 	switch (node->type) {
 		case AST_NUM:    printf("NUM(%d)\n", node->val); break;
+		case AST_STR:    printf("STR(\"%s\")\n", node->var_name); break;
+		case AST_STRING: printf("STR(\"%s\")\n", node->str_val); break;
 		case AST_VAR:    printf("VAR(%s)\n", node->var_name); break;
 		case AST_ASSIGN: printf("=\n"); break;
 		case AST_ADD:    printf("+\n"); break;

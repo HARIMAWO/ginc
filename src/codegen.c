@@ -3,6 +3,7 @@
 #include <llvm-c/Analysis.h>
 #include <llvm-c/ExecutionEngine.h>
 #include <llvm-c/Target.h>
+#include <llvm-c/Support.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -18,13 +19,19 @@ LLVMValueRef generate_node(ASTNode* node) {
         case AST_NUM:
             return LLVMConstInt(LLVMInt32TypeInContext(context), node->val, 0);
 
+        case AST_STR:
+            return LLVMBuildGlobalStringPtr(builder, node->var_name, "str_literal");
+
+        case AST_STRING:
+            return LLVMBuildGlobalStringPtr(builder, node->str_val, "strtmp");
+
         case AST_VAR: {
             LLVMValueRef var = LLVMGetNamedGlobal(module, node->var_name);
             if (!var) {
                 fprintf(stderr, "Ga! (Codegen Error): Unknown variable '%s'\n", node->var_name);
                 return NULL;
             }
-            return LLVMBuildLoad2(builder, LLVMInt32TypeInContext(context), var, node->var_name);
+            return LLVMBuildLoad2(builder, LLVMGlobalGetValueType(var), var, node->var_name);
         }
 
         case AST_ASSIGN: {
@@ -40,8 +47,9 @@ LLVMValueRef generate_node(ASTNode* node) {
             LLVMValueRef var = LLVMGetNamedGlobal(module, var_name);
             
             if (!var) {
-                var = LLVMAddGlobal(module, LLVMInt32TypeInContext(context), var_name);
-                LLVMSetInitializer(var, LLVMConstNull(LLVMInt32TypeInContext(context)));
+                LLVMTypeRef val_type = LLVMTypeOf(rhs);
+                var = LLVMAddGlobal(module, val_type, var_name);
+                LLVMSetInitializer(var, LLVMConstNull(val_type));
             }
 
             LLVMBuildStore(builder, rhs, var);
@@ -51,6 +59,21 @@ LLVMValueRef generate_node(ASTNode* node) {
         case AST_ADD: {
             LLVMValueRef lhs = generate_node(node->left);
             LLVMValueRef rhs = generate_node(node->right);
+
+            if (LLVMGetTypeKind(LLVMTypeOf(lhs)) == LLVMPointerTypeKind) {
+                LLVMTypeRef ptr_type = LLVMPointerType(LLVMInt8TypeInContext(context), 0);
+                LLVMTypeRef param_types[] = { ptr_type, ptr_type };
+                LLVMTypeRef concat_type = LLVMFunctionType(ptr_type, param_types, 2, 0);
+
+                LLVMValueRef concat_func = LLVMGetNamedFunction(module, "ginc_str_concat");
+                if (!concat_func) {
+                    concat_func = LLVMAddFunction(module, "ginc_str_concat", concat_type);
+                }
+
+                LLVMValueRef args[] = { lhs, rhs };
+                return LLVMBuildCall2(builder, concat_type, concat_func, args, 2, "concattmp");
+            }
+
             return LLVMBuildAdd(builder, lhs, rhs, "addtmp");
         }
 
@@ -78,7 +101,12 @@ LLVMValueRef generate_node(ASTNode* node) {
                 printf_func = LLVMAddFunction(module, "printf", printf_type);
             }
 
-            LLVMValueRef format_str = LLVMBuildGlobalStringPtr(builder, "%d\n", "fmt");
+            char const* fmt = "%d\n";
+            if (LLVMGetTypeKind(LLVMTypeOf(arg_val)) == LLVMPointerTypeKind) {
+                fmt = "%s\n";
+            }
+
+            LLVMValueRef format_str = LLVMBuildGlobalStringPtr(builder, fmt, "fmt");
             LLVMValueRef args[] = { format_str, arg_val };
             return LLVMBuildCall2(builder, printf_type, printf_func, args, 2, "printf_call");
         }
@@ -196,6 +224,9 @@ void generate_code(ASTNode* root) {
     LLVMInitializeNativeTarget();
     LLVMInitializeNativeAsmPrinter();
     LLVMInitializeNativeAsmParser();
+
+    char* ginc_str_concat(char const* s1, char const* s2);
+    LLVMAddSymbol("ginc_str_concat", (void*)ginc_str_concat);
 
     LLVMExecutionEngineRef engine;
     LLVMLinkInMCJIT();

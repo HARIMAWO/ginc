@@ -24,6 +24,7 @@ int yylex() {
         WS = [ \t\r\n]+;
         NUM = [0-9]+;
         IDENT = [a-zA-Z_][a-zA-Z0-9_]*;
+        STR = "\"" [^"\x00\n]* "\"";
 
         * { printf("Ga! (Lex Error): Unknown token\n"); exit(1); }
         "\x00" { return 0; }
@@ -33,6 +34,11 @@ int yylex() {
             // strtolは数字以外の文字(スペースやセミコロン)で勝手に止まるため安全
             yylval.num = strtol(tok, NULL, 10);
             return T_NUM;
+        }
+        STR {
+            // 前後のダブルクォーテーションを除外して複製
+            yylval.str = strndup(tok + 1, cursor - tok - 2);
+            return T_STRING;
         }
         "if" { return T_IF; }
         "else" { return T_ELSE; }
