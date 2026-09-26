@@ -6,7 +6,9 @@ typedef enum {
     AST_VAR,
     AST_ASSIGN,
     AST_ADD,
-    AST_SUB
+    AST_SUB,
+    AST_SEQ,
+    AST_PRINT
 } ASTNodeType;
 
 // 前方宣言
@@ -23,6 +25,7 @@ struct ASTNode {
 ASTNode* make_num_node(int val);
 ASTNode* make_var_node(char* name);
 ASTNode* make_binop_node(ASTNodeType type, ASTNode* left, ASTNode* right);
+ASTNode* make_print_node(ASTNode* arg);
 void print_ast(ASTNode* node, int depth); // ★追加
 
 #endif

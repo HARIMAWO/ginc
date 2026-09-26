@@ -24,6 +24,14 @@ ASTNode* make_binop_node(ASTNodeType type, ASTNode* left, ASTNode* right) {
     return node;
 }
 
+ASTNode* make_print_node(ASTNode* arg) {
+    ASTNode* node = malloc(sizeof(ASTNode));
+    node->type = AST_PRINT;
+    node->left = arg;
+    node->right = NULL;
+    return node;
+}
+
 // ASTの構造をツリー状に表示するデバッグ関数
 void print_ast(ASTNode* node, int depth) {
     if (!node) return;
@@ -35,11 +43,15 @@ void print_ast(ASTNode* node, int depth) {
         case AST_ASSIGN: printf("=\n"); break;
         case AST_ADD:    printf("+\n"); break;
         case AST_SUB:    printf("-\n"); break;
+        case AST_SEQ:    printf("SEQ\n"); break;
+        case AST_PRINT:  printf("PRINT\n"); break;
     }
     
-    // 二項演算子の場合は子ノードも再帰的に表示
-    if (node->type == AST_ASSIGN || node->type == AST_ADD || node->type == AST_SUB) {
+    // 子ノードの再帰表示
+    if (node->type == AST_SEQ || node->type == AST_ASSIGN || node->type == AST_ADD || node->type == AST_SUB) {
         print_ast(node->left, depth + 1);
         print_ast(node->right, depth + 1);
+    } else if (node->type == AST_PRINT) {
+        print_ast(node->left, depth + 1);
     }
 }

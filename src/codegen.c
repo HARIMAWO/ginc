@@ -59,6 +59,31 @@ LLVMValueRef generate_node(ASTNode* node) {
             LLVMValueRef rhs = generate_node(node->right);
             return LLVMBuildSub(builder, lhs, rhs, "subtmp");
         }
+
+        case AST_SEQ:
+            generate_node(node->left);
+            return generate_node(node->right);
+
+        case AST_PRINT: {
+            LLVMValueRef arg_val = generate_node(node->left);
+            if (!arg_val) return NULL;
+
+            LLVMValueRef printf_func = LLVMGetNamedFunction(module, "printf");
+            LLVMTypeRef printf_type;
+
+            if (!printf_func) {
+                LLVMTypeRef param_types[] = { LLVMPointerType(LLVMInt8TypeInContext(context), 0) };
+                printf_type = LLVMFunctionType(LLVMInt32TypeInContext(context), param_types, 1, 1);
+                printf_func = LLVMAddFunction(module, "printf", printf_type);
+            } else {
+                printf_type = LLVMGetCalledFunctionType(printf_func);
+            }
+
+            LLVMValueRef fmt_str = LLVMBuildGlobalStringPtr(builder, "%d\n", "fmt");
+            LLVMValueRef args[] = { fmt_str, arg_val };
+
+            return LLVMBuildCall2(builder, printf_type, printf_func, args, 2, "printf_call");
+        }
     }
     return NULL;
 }

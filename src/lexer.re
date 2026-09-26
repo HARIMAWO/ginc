@@ -34,6 +34,7 @@ int yylex() {
             yylval.num = strtol(tok, NULL, 10);
             return T_NUM;
         }
+        "print" { return T_PRINT; }
         IDENT {
             // 変数名はASTに持たせるため、tokから差分(文字数)だけ複製
             yylval.str = strndup(tok, cursor - tok); 
@@ -43,6 +44,8 @@ int yylex() {
         "+" { return T_PLUS; }
         "-" { return T_MINUS; }
         ";" { return T_SEMI; }
+        "(" { return T_LPAREN; }
+        ")" { return T_RPAREN; }
         */
     }
 }
