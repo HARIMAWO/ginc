@@ -16,7 +16,7 @@ ASTNode* root_node;
 
 %token <num> T_NUM
 %token <str> T_IDENT T_STR T_STRING T_REGEX
-%token T_ASSIGN T_PLUS T_MINUS T_SEMI T_PRINT T_LPAREN T_RPAREN T_IF T_ELSE T_WHILE T_LBRACE T_RBRACE T_EQ T_LT T_MATCH
+%token T_INT_TYPE T_STR_TYPE T_ASSIGN T_PLUS T_MINUS T_SEMI T_PRINT T_LPAREN T_RPAREN T_IF T_ELSE T_WHILE T_LBRACE T_RBRACE T_EQ T_LT T_MATCH
 
 %type <ast> stmt_list stmt expr
 
@@ -36,7 +36,13 @@ stmt_list:
     ;
 
 stmt:
-    T_IDENT T_ASSIGN expr T_SEMI {
+    T_INT_TYPE T_IDENT T_ASSIGN expr T_SEMI {
+        $$ = make_vardecl_node(TYPE_INT, $2, $4);
+    }
+    | T_STR_TYPE T_IDENT T_ASSIGN expr T_SEMI {
+        $$ = make_vardecl_node(TYPE_STR, $2, $4);
+    }
+    | T_IDENT T_ASSIGN expr T_SEMI {
         $$ = make_binop_node(AST_ASSIGN, make_var_node($1), $3);
     }
     | T_PRINT T_LPAREN expr T_RPAREN T_SEMI {
@@ -75,5 +81,5 @@ expr:
 %%
 
 void yyerror(const char *s) {
-    fprintf(stderr, "Ga! (Parse Error): %s\n", s);
+    fprintf(stderr, "%s:%d:%d: Ga! (Parse Error): %s\n", current_filename, current_line, current_column, s);
 }

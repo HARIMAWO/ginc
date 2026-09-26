@@ -7,6 +7,17 @@
 const char *cursor;
 const char *limit;
 
+static void update_location(char const* tok, char const* cur) {
+	for (char const* p = tok; p < cur; p++) {
+		if (*p == '\n') {
+			current_line++;
+			current_column = 1;
+		} else {
+			current_column++;
+		}
+	}
+}
+
 int yylex() {
     const char *marker;
 	(void)marker;
@@ -21,51 +32,66 @@ int yylex() {
         re2c:define:YYLIMIT = limit;
         re2c:yyfill:enable = 0;
 
+        SHEBANG = "#!" [^\n\x00]*;
         WS = [ \t\r\n]+;
+        LINE_COMMENT = "//" [^\n\x00]*;
+        BLOCK_COMMENT = "/*" ([^*] | ("*" [^/]))* "*"+ "/";
         NUM = [0-9]+;
         IDENT = [a-zA-Z_][a-zA-Z0-9_]*;
         STR = "\"" [^"\x00\n]* "\"";
         REGEX = "/" [^/\x00\n]+ "/";
 
-        * { printf("Ga! (Lex Error): Unknown token\n"); exit(1); }
+        * {
+            fprintf(stderr, "%s:%d:%d: Ga! (Lex Error): Unknown token '%c'\n", current_filename, current_line, current_column, *tok);
+            exit(1);
+        }
         "\x00" { return 0; }
-        WS { continue; }
+        SHEBANG { update_location(tok, cursor); continue; }
+        WS { update_location(tok, cursor); continue; }
+        LINE_COMMENT { update_location(tok, cursor); continue; }
+        BLOCK_COMMENT { update_location(tok, cursor); continue; }
 
         NUM {
+            update_location(tok, cursor);
             // strtolは数字以外の文字(スペースやセミコロン)で勝手に止まるため安全
             yylval.num = strtol(tok, NULL, 10);
             return T_NUM;
         }
         STR {
+            update_location(tok, cursor);
             // 前後のダブルクォーテーションを除外して複製
             yylval.str = strndup(tok + 1, cursor - tok - 2);
             return T_STRING;
         }
         REGEX {
+            update_location(tok, cursor);
             // 前後のスラッシュを除外して複製
             yylval.str = strndup(tok + 1, cursor - tok - 2);
             return T_REGEX;
         }
-        "=~" { return T_MATCH; }
-        "if" { return T_IF; }
-        "else" { return T_ELSE; }
-        "while" { return T_WHILE; }
-        "print" { return T_PRINT; }
+        "=~" { update_location(tok, cursor); return T_MATCH; }
+        "int" { update_location(tok, cursor); return T_INT_TYPE; }
+        "str" { update_location(tok, cursor); return T_STR_TYPE; }
+        "if" { update_location(tok, cursor); return T_IF; }
+        "else" { update_location(tok, cursor); return T_ELSE; }
+        "while" { update_location(tok, cursor); return T_WHILE; }
+        "print" { update_location(tok, cursor); return T_PRINT; }
         IDENT {
+            update_location(tok, cursor);
             // 変数名はASTに持たせるため、tokから差分(文字数)だけ複製
             yylval.str = strndup(tok, cursor - tok); 
             return T_IDENT;
         }
-        "==" { return T_EQ; }
-        "=" { return T_ASSIGN; }
-        "<" { return T_LT; }
-        "+" { return T_PLUS; }
-        "-" { return T_MINUS; }
-        ";" { return T_SEMI; }
-        "(" { return T_LPAREN; }
-        ")" { return T_RPAREN; }
-        "{" { return T_LBRACE; }
-        "}" { return T_RBRACE; }
+        "==" { update_location(tok, cursor); return T_EQ; }
+        "=" { update_location(tok, cursor); return T_ASSIGN; }
+        "<" { update_location(tok, cursor); return T_LT; }
+        "+" { update_location(tok, cursor); return T_PLUS; }
+        "-" { update_location(tok, cursor); return T_MINUS; }
+        ";" { update_location(tok, cursor); return T_SEMI; }
+        "(" { update_location(tok, cursor); return T_LPAREN; }
+        ")" { update_location(tok, cursor); return T_RPAREN; }
+        "{" { update_location(tok, cursor); return T_LBRACE; }
+        "}" { update_location(tok, cursor); return T_RBRACE; }
         */
     }
 }

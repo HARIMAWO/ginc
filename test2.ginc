@@ -1,0 +1,13 @@
+#!/usr/bin/env ginc
+// 上の行はシバンとして無視されます
+
+int count = 10;
+str msg = "Type Declaration Works!";
+print(msg);
+
+// 配列の宣言と初期化
+int list[5] = { 100, 200, 300, 400, 500 };
+
+// 配列の要素にアクセスして計算
+int result = list[0] + list[4];
+print(result);

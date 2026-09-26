@@ -37,6 +37,15 @@ ASTNode* make_var_node(char* name) {
 	return node;
 }
 
+ASTNode* make_vardecl_node(GincType type, char* var_name, ASTNode* init_expr) {
+	ASTNode* node = malloc(sizeof(ASTNode));
+	node->type = AST_VARDECL;
+	node->var_type = type;
+	node->var_name = var_name;
+	node->right = init_expr;
+	return node;
+}
+
 ASTNode* make_binop_node(ASTNodeType type, ASTNode* left, ASTNode* right) {
 	ASTNode* node = malloc(sizeof(ASTNode));
 	node->type = type;
@@ -88,6 +97,13 @@ void print_ast(ASTNode* node, int depth) {
 		case AST_STRING: printf("STR(\"%s\")\n", node->str_val); break;
 		case AST_REGEX:  printf("REGEX(/%s/)\n", node->str_val); break;
 		case AST_VAR:    printf("VAR(%s)\n", node->var_name); break;
+		case AST_VARDECL:
+			if (node->var_type == TYPE_INT) {
+				printf("INT VARDECL(%s)\n", node->var_name);
+			} else {
+				printf("STR VARDECL(%s)\n", node->var_name);
+			}
+			break;
 		case AST_ASSIGN: printf("=\n"); break;
 		case AST_ADD:    printf("+\n"); break;
 		case AST_SUB:    printf("-\n"); break;
@@ -104,6 +120,8 @@ void print_ast(ASTNode* node, int depth) {
 	// 子ノードの再帰表示
 	if (node->type == AST_SEQ || node->type == AST_ASSIGN || node->type == AST_ADD || node->type == AST_SUB || node->type == AST_EQ || node->type == AST_LT || node->type == AST_MATCH) {
 		print_ast(node->left, depth + 1);
+		print_ast(node->right, depth + 1);
+	} else if (node->type == AST_VARDECL) {
 		print_ast(node->right, depth + 1);
 	} else if (node->type == AST_PRINT || node->type == AST_BLOCK) {
 		print_ast(node->left, depth + 1);

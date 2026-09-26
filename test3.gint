@@ -1,0 +1,2 @@
+int count = 10;
+str msg = "Hello";

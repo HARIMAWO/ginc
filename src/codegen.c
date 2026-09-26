@@ -37,6 +37,24 @@ LLVMValueRef generate_node(ASTNode* node) {
             return LLVMBuildLoad2(builder, LLVMGlobalGetValueType(var), var, node->var_name);
         }
 
+        case AST_VARDECL: {
+            LLVMValueRef init_val = generate_node(node->right);
+            if (!init_val) return NULL;
+
+            char const* const var_name = node->var_name;
+            if (LLVMGetNamedGlobal(module, var_name)) {
+                fprintf(stderr, "Ga! (Codegen Error): Variable '%s' is already declared\n", var_name);
+                return NULL;
+            }
+
+            LLVMTypeRef const val_type = LLVMTypeOf(init_val);
+            LLVMValueRef const var = LLVMAddGlobal(module, val_type, var_name);
+            LLVMSetInitializer(var, LLVMConstNull(val_type));
+
+            LLVMBuildStore(builder, init_val, var);
+            return init_val;
+        }
+
         case AST_ASSIGN: {
             LLVMValueRef rhs = generate_node(node->right);
             if (!rhs) return NULL;
@@ -46,13 +64,12 @@ LLVMValueRef generate_node(ASTNode* node) {
                 return NULL;
             }
 
-            char* var_name = node->left->var_name;
-            LLVMValueRef var = LLVMGetNamedGlobal(module, var_name);
+            char const* const var_name = node->left->var_name;
+            LLVMValueRef const var = LLVMGetNamedGlobal(module, var_name);
             
             if (!var) {
-                LLVMTypeRef val_type = LLVMTypeOf(rhs);
-                var = LLVMAddGlobal(module, val_type, var_name);
-                LLVMSetInitializer(var, LLVMConstNull(val_type));
+                fprintf(stderr, "Ga! (Codegen Error): Undeclared variable '%s'\n", var_name);
+                return NULL;
             }
 
             LLVMBuildStore(builder, rhs, var);
