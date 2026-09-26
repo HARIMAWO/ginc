@@ -1,2 +1,9 @@
+#! /usr/bin/env gint
+
 // [10] のようなサイズ指定はさせない（バッファオーバーランを防ぐため）
-int[] list = { 1, 2, 3, 4, 5 };
+int list[10] = { 1, 2, 3, 4, 5 };
+
+print(list[0]);
+print(list[2]);
+print(list[4]);
+print(list[11]);

@@ -23,7 +23,10 @@ typedef enum {
 	AST_WHILE,
 	AST_EQ,
 	AST_LT,
-	AST_MATCH
+	AST_MATCH,
+	AST_ARRAY_DECL,
+	AST_ARRAY_ACCESS,
+	AST_EXPR_LIST
 } ASTNodeType;
 
 // 前方宣言
@@ -53,6 +56,9 @@ ASTNode* make_print_node(ASTNode* arg);
 ASTNode* make_if_node(ASTNode* cond, ASTNode* then_body, ASTNode* else_body);
 ASTNode* make_while_node(ASTNode* cond, ASTNode* body);
 ASTNode* make_block_node(ASTNode* stmt_list);
+ASTNode* make_array_decl_node(GincType type, char* name, int max_size, ASTNode* init_list);
+ASTNode* make_array_access_node(char* name, ASTNode* index);
+ASTNode* make_expr_list_node(ASTNode* expr, ASTNode* next);
 void print_ast(ASTNode* node, int depth); // ★追加
 
 extern char const* current_filename;

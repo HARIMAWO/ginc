@@ -1,0 +1,15 @@
+#!/usr/bin/env ginc
+int add(int a, int b) {
+    int result = a + b;
+    return result;
+}
+
+int fib(int n) {
+    if (n < 2) {
+        return n;
+    }
+    return fib(n - 1) + fib(n - 2);
+}
+
+print(add(10, 20));
+print(fib(10)); // フィボナッチ数列の10番目 (55) を計算

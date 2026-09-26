@@ -86,6 +86,32 @@ ASTNode* make_block_node(ASTNode* stmt_list) {
 	return node;
 }
 
+ASTNode* make_array_decl_node(GincType type, char* name, int max_size, ASTNode* init_list) {
+	ASTNode* node = malloc(sizeof(ASTNode));
+	node->type = AST_ARRAY_DECL;
+	node->var_type = type;
+	node->var_name = name;
+	node->val = max_size;
+	node->right = init_list;
+	return node;
+}
+
+ASTNode* make_array_access_node(char* name, ASTNode* index) {
+	ASTNode* node = malloc(sizeof(ASTNode));
+	node->type = AST_ARRAY_ACCESS;
+	node->var_name = name;
+	node->left = index;
+	return node;
+}
+
+ASTNode* make_expr_list_node(ASTNode* expr, ASTNode* next) {
+	ASTNode* node = malloc(sizeof(ASTNode));
+	node->type = AST_EXPR_LIST;
+	node->left = expr;
+	node->right = next;
+	return node;
+}
+
 // ASTの構造をツリー状に表示するデバッグ関数
 void print_ast(ASTNode* node, int depth) {
 	if (!node) return;
@@ -115,6 +141,9 @@ void print_ast(ASTNode* node, int depth) {
 		case AST_EQ:     printf("==\n"); break;
 		case AST_LT:     printf("<\n"); break;
 		case AST_MATCH:  printf("=~\n"); break;
+		case AST_ARRAY_DECL: printf("ARRAY_DECL(%s[%d])\n", node->var_name, node->val); break;
+		case AST_ARRAY_ACCESS: printf("ARRAY_ACCESS(%s)\n", node->var_name); break;
+		case AST_EXPR_LIST: printf("EXPR_LIST\n"); break;
 	}
 	
 	// 子ノードの再帰表示
@@ -134,5 +163,12 @@ void print_ast(ASTNode* node, int depth) {
 	} else if (node->type == AST_WHILE) {
 		print_ast(node->cond, depth + 1);
 		print_ast(node->then_body, depth + 1);
+	} else if (node->type == AST_ARRAY_DECL) {
+		print_ast(node->right, depth + 1);
+	} else if (node->type == AST_ARRAY_ACCESS || node->type == AST_EXPR_LIST) {
+		print_ast(node->left, depth + 1);
+		if (node->right) {
+			print_ast(node->right, depth + 1);
+		}
 	}
 }

@@ -32,9 +32,9 @@ int yylex() {
         re2c:define:YYLIMIT = limit;
         re2c:yyfill:enable = 0;
 
-        SHEBANG = "#!" [^\n\x00]*;
+        SHEBANG = "#!" [^\x00\n]*;
         WS = [ \t\r\n]+;
-        LINE_COMMENT = "//" [^\n\x00]*;
+        LINE_COMMENT = "//" [^\x00\n]*;
         BLOCK_COMMENT = "/*" ([^*] | ("*" [^/]))* "*"+ "/";
         NUM = [0-9]+;
         IDENT = [a-zA-Z_][a-zA-Z0-9_]*;
@@ -92,6 +92,9 @@ int yylex() {
         ")" { update_location(tok, cursor); return T_RPAREN; }
         "{" { update_location(tok, cursor); return T_LBRACE; }
         "}" { update_location(tok, cursor); return T_RBRACE; }
+        "[" { update_location(tok, cursor); return T_LBRACKET; }
+        "]" { update_location(tok, cursor); return T_RBRACKET; }
+        "," { update_location(tok, cursor); return T_COMMA; }
         */
     }
 }

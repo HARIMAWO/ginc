@@ -55,6 +55,57 @@ LLVMValueRef generate_node(ASTNode* node) {
             return init_val;
         }
 
+        case AST_ARRAY_DECL: {
+            char const* const array_name = node->var_name;
+            if (LLVMGetNamedGlobal(module, array_name)) {
+                fprintf(stderr, "Ga! (Codegen Error): Array '%s' is already declared\n", array_name);
+                return NULL;
+            }
+
+            LLVMTypeRef elem_type = LLVMInt32TypeInContext(context);
+            LLVMTypeRef array_type = LLVMArrayType(elem_type, node->val);
+            LLVMValueRef array_var = LLVMAddGlobal(module, array_type, array_name);
+            LLVMSetInitializer(array_var, LLVMConstNull(array_type));
+
+            ASTNode* curr = node->right;
+            int idx = 0;
+            while (curr && idx < node->val) {
+                LLVMValueRef elem_val = generate_node(curr->left);
+                if (elem_val) {
+                    LLVMValueRef indices[] = {
+                        LLVMConstInt(LLVMInt32TypeInContext(context), 0, 0),
+                        LLVMConstInt(LLVMInt32TypeInContext(context), idx, 0)
+                    };
+                    LLVMValueRef gep = LLVMBuildGEP2(builder, array_type, array_var, indices, 2, "arrayidx");
+                    LLVMBuildStore(builder, elem_val, gep);
+                }
+                curr = curr->right;
+                idx++;
+            }
+            return array_var;
+        }
+
+        case AST_ARRAY_ACCESS: {
+            char const* const array_name = node->var_name;
+            LLVMValueRef array_var = LLVMGetNamedGlobal(module, array_name);
+            if (!array_var) {
+                fprintf(stderr, "Ga! (Codegen Error): Undeclared array '%s'\n", array_name);
+                return NULL;
+            }
+
+            LLVMTypeRef array_type = LLVMGlobalGetValueType(array_var);
+            LLVMValueRef idx_val = generate_node(node->left);
+            if (!idx_val) return NULL;
+
+            LLVMValueRef indices[] = {
+                LLVMConstInt(LLVMInt32TypeInContext(context), 0, 0),
+                idx_val
+            };
+            LLVMValueRef gep = LLVMBuildGEP2(builder, array_type, array_var, indices, 2, "arrayidx");
+            LLVMTypeRef elem_type = LLVMGetElementType(array_type);
+            return LLVMBuildLoad2(builder, elem_type, gep, array_name);
+        }
+
         case AST_ASSIGN: {
             LLVMValueRef rhs = generate_node(node->right);
             if (!rhs) return NULL;
@@ -224,6 +275,9 @@ LLVMValueRef generate_node(ASTNode* node) {
             LLVMPositionBuilderAtEnd(builder, after_bb);
             return NULL;
         }
+
+        case AST_EXPR_LIST:
+            return NULL;
     }
     return NULL;
 }
