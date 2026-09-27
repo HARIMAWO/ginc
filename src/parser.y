@@ -21,15 +21,19 @@ static int current_access = 0;
 %token <num> T_NUM
 %token <float_val> T_FLOAT_LITERAL
 %token <str> T_IDENT T_STR T_STRING T_REGEX
-%token T_INT_TYPE T_STR_TYPE T_VAR_TYPE T_DOUBLE_TYPE T_ASSIGN T_PLUS T_MINUS T_STAR T_SLASH T_SEMI T_PRINT T_LPAREN T_RPAREN T_IF T_ELSE T_WHILE T_LBRACE T_RBRACE T_EQ T_LT T_MATCH T_LBRACKET T_RBRACKET T_COMMA T_RETURN T_TRY T_CATCH T_THROW T_FINALLY T_DOT T_CLASS T_STRUCT T_PUBLIC T_PRIVATE T_COLON T_TRUE T_FALSE T_NULL T_VOID T_CHAR T_FILE
+%token T_INT_TYPE T_STR_TYPE T_VAR_TYPE T_DOUBLE_TYPE T_ASSIGN T_PLUS T_MINUS T_STAR T_SLASH T_SEMI T_PRINT T_LPAREN T_RPAREN T_IF T_ELSE T_WHILE T_LBRACE T_RBRACE T_EQ T_LT T_MATCH T_LBRACKET T_RBRACKET T_COMMA T_RETURN T_TRY T_CATCH T_THROW T_FINALLY T_DOT T_CLASS T_STRUCT T_PUBLIC T_PRIVATE T_COLON T_TRUE T_FALSE T_NULL T_VOID T_CHAR T_FILE T_AND T_OR T_NOT T_NEQ T_GT T_LE T_GE T_MOD T_AMP
 
 %type <ast> stmt_list stmt expr expr_list param_list param_decl member_decl member_list class_def class_member class_item class_member_list finally_clause func_body catch_block catch_list
 
-%left T_MATCH
-%left T_EQ T_LT
+%right T_ASSIGN
+%left T_OR
+%left T_AND
+%left T_EQ T_NEQ
+%left T_LT T_LE T_GT T_GE T_MATCH
 %left T_PLUS T_MINUS
-%left T_STAR T_SLASH
-%right UMINUS
+%left T_STAR T_SLASH T_MOD
+%right UMINUS T_NOT USTAR UAMP
+%left T_DOT T_LBRACKET T_LPAREN
 
 %%
 
@@ -255,6 +259,7 @@ stmt:
 expr:
     T_NUM { $$ = make_num_node($1); }
     | T_FLOAT_LITERAL { $$ = make_float_node($1); }
+    | T_LPAREN expr T_RPAREN { $$ = $2; }
     | T_TRUE { $$ = make_num_node(1); }
     | T_FALSE { $$ = make_num_node(0); }
     | T_NULL { $$ = make_unary_node(AST_NULL, NULL); }
@@ -268,14 +273,22 @@ expr:
     | T_IDENT T_DOT T_IDENT { $$ = make_array_access_node($1, make_string_node($3)); }
     | T_IDENT T_LBRACKET expr T_RBRACKET { $$ = make_array_access_node($1, $3); }
     | T_IDENT { $$ = make_var_node($1); }
+    | expr T_OR expr { $$ = make_binop_node(AST_LOGICAL_OR, $1, $3); }
+    | expr T_AND expr { $$ = make_binop_node(AST_LOGICAL_AND, $1, $3); }
+    | T_NOT expr %prec T_NOT { $$ = make_unary_node(AST_LOGICAL_NOT, $2); }
     | expr T_MATCH expr { $$ = make_binop_node(AST_MATCH, $1, $3); }
     | expr T_EQ expr { $$ = make_binop_node(AST_EQ, $1, $3); }
+    | expr T_NEQ expr { $$ = make_binop_node(AST_NEQ, $1, $3); }
     | expr T_LT expr { $$ = make_binop_node(AST_LT, $1, $3); }
+    | expr T_LE expr { $$ = make_binop_node(AST_LE, $1, $3); }
+    | expr T_GT expr { $$ = make_binop_node(AST_GT, $1, $3); }
+    | expr T_GE expr { $$ = make_binop_node(AST_GE, $1, $3); }
     | expr T_PLUS expr { $$ = make_binop_node(AST_ADD, $1, $3); }
     | expr T_MINUS expr { $$ = make_binop_node(AST_SUB, $1, $3); }
     | T_MINUS expr %prec UMINUS { $$ = make_unary_node(AST_UNARY_MINUS, $2); }
     | expr T_STAR expr { $$ = make_binop_node(AST_MUL, $1, $3); }
     | expr T_SLASH expr { $$ = make_binop_node(AST_DIV, $1, $3); }
+    | expr T_MOD expr { $$ = make_binop_node(AST_MOD, $1, $3); }
     ;
 
 %%

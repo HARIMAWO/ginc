@@ -576,6 +576,12 @@ LLVMValueRef generate_node(ASTNode* node) {
             return LLVMBuildSDiv(builder, lhs, rhs, "divtmp");
         }
 
+        case AST_MOD: {
+            LLVMValueRef lhs = auto_unwrap(generate_node(node->left));
+            LLVMValueRef rhs = auto_unwrap(generate_node(node->right));
+            return LLVMBuildSRem(builder, lhs, rhs, "modtmp");
+        }
+
         case AST_SEQ: {
             generate_node(node->left);
             generate_node(node->right);
@@ -650,14 +656,73 @@ LLVMValueRef generate_node(ASTNode* node) {
         }
 
         case AST_EQ:
-        case AST_LT: {
+        case AST_NEQ:
+        case AST_LT:
+        case AST_LE:
+        case AST_GT:
+        case AST_GE: {
+            LLVMValueRef lhs = generate_node(node->left);
+            LLVMValueRef rhs = generate_node(node->right);
+            if (!lhs || !rhs) return NULL;
+
+            int const lhs_is_ptr = (LLVMGetTypeKind(LLVMTypeOf(lhs)) == LLVMPointerTypeKind);
+            int const rhs_is_ptr = (LLVMGetTypeKind(LLVMTypeOf(rhs)) == LLVMPointerTypeKind);
+
+            if (lhs_is_ptr && rhs_is_ptr) {
+                LLVMIntPredicate pred;
+                switch (node->type) {
+                    case AST_EQ:  pred = LLVMIntEQ; break;
+                    case AST_NEQ: pred = LLVMIntNE; break;
+                    case AST_LT:  pred = LLVMIntULT; break;
+                    case AST_LE:  pred = LLVMIntULE; break;
+                    case AST_GT:  pred = LLVMIntUGT; break;
+                    case AST_GE:  pred = LLVMIntUGE; break;
+                    default:      pred = LLVMIntEQ; break;
+                }
+                LLVMValueRef cmp = LLVMBuildICmp(builder, pred, lhs, rhs, "ptrcmptmp");
+                return LLVMBuildZExt(builder, cmp, LLVMInt32TypeInContext(context), "ptrzexttmp");
+            }
+
+            lhs = auto_unwrap(lhs);
+            rhs = auto_unwrap(rhs);
+
+            LLVMIntPredicate pred;
+            switch (node->type) {
+                case AST_EQ:  pred = LLVMIntEQ; break;
+                case AST_NEQ: pred = LLVMIntNE; break;
+                case AST_LT:  pred = LLVMIntSLT; break;
+                case AST_LE:  pred = LLVMIntSLE; break;
+                case AST_GT:  pred = LLVMIntSGT; break;
+                case AST_GE:  pred = LLVMIntSGE; break;
+                default:      pred = LLVMIntEQ; break;
+            }
+            LLVMValueRef cmp = LLVMBuildICmp(builder, pred, lhs, rhs, "cmptmp");
+            return LLVMBuildZExt(builder, cmp, LLVMInt32TypeInContext(context), "zexttmp");
+        }
+
+        case AST_LOGICAL_NOT: {
+            LLVMValueRef val = auto_unwrap(generate_node(node->left));
+            if (!val) return NULL;
+            LLVMValueRef zero = LLVMConstInt(LLVMInt32TypeInContext(context), 0, 0);
+            LLVMValueRef cmp = LLVMBuildICmp(builder, LLVMIntEQ, val, zero, "nottmp");
+            return LLVMBuildZExt(builder, cmp, LLVMInt32TypeInContext(context), "notzext");
+        }
+
+        case AST_LOGICAL_AND:
+        case AST_LOGICAL_OR: {
             LLVMValueRef lhs = auto_unwrap(generate_node(node->left));
             LLVMValueRef rhs = auto_unwrap(generate_node(node->right));
             if (!lhs || !rhs) return NULL;
 
-            LLVMIntPredicate pred = (node->type == AST_EQ) ? LLVMIntEQ : LLVMIntSLT;
-            LLVMValueRef cmp = LLVMBuildICmp(builder, pred, lhs, rhs, "cmptmp");
-            return LLVMBuildZExt(builder, cmp, LLVMInt32TypeInContext(context), "zexttmp");
+            LLVMValueRef zero = LLVMConstInt(LLVMInt32TypeInContext(context), 0, 0);
+            LLVMValueRef lhs_b = LLVMBuildICmp(builder, LLVMIntNE, lhs, zero, "lhs_b");
+            LLVMValueRef rhs_b = LLVMBuildICmp(builder, LLVMIntNE, rhs, zero, "rhs_b");
+
+            LLVMValueRef res = (node->type == AST_LOGICAL_AND)
+                ? LLVMBuildAnd(builder, lhs_b, rhs_b, "andtmp")
+                : LLVMBuildOr(builder, lhs_b, rhs_b, "ortmp");
+
+            return LLVMBuildZExt(builder, res, LLVMInt32TypeInContext(context), "logzext");
         }
 
         case AST_IF: {

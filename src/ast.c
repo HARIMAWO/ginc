@@ -272,6 +272,14 @@ void print_ast(ASTNode* node, int depth) {
 		case AST_UNARY_MINUS: printf("UNARY -\n"); break;
 		case AST_MUL:    printf("*\n"); break;
 		case AST_DIV:    printf("/\n"); break;
+		case AST_MOD:    printf("%%\n"); break;
+		case AST_LOGICAL_OR:  printf("||\n"); break;
+		case AST_LOGICAL_AND: printf("&&\n"); break;
+		case AST_LOGICAL_NOT: printf("!\n"); break;
+		case AST_NEQ:    printf("!=\n"); break;
+		case AST_GT:     printf(">\n"); break;
+		case AST_LE:     printf("<=\n"); break;
+		case AST_GE:     printf(">=\n"); break;
 		case AST_SEQ:    printf("SEQ\n"); break;
 		case AST_PRINT:  printf("PRINT\n"); break;
 		case AST_BLOCK:  printf("BLOCK\n"); break;
@@ -304,12 +312,12 @@ void print_ast(ASTNode* node, int depth) {
 	}
 	
 	// 子ノードの再帰表示
-	if (node->type == AST_SEQ || node->type == AST_ASSIGN || node->type == AST_ADD || node->type == AST_SUB || node->type == AST_MUL || node->type == AST_DIV || node->type == AST_EQ || node->type == AST_LT || node->type == AST_MATCH) {
+	if (node->type == AST_SEQ || node->type == AST_ASSIGN || node->type == AST_ADD || node->type == AST_SUB || node->type == AST_MUL || node->type == AST_DIV || node->type == AST_MOD || node->type == AST_LOGICAL_OR || node->type == AST_LOGICAL_AND || node->type == AST_EQ || node->type == AST_NEQ || node->type == AST_LT || node->type == AST_LE || node->type == AST_GT || node->type == AST_GE || node->type == AST_MATCH) {
 		print_ast(node->left, depth + 1);
 		print_ast(node->right, depth + 1);
 	} else if (node->type == AST_VARDECL) {
 		print_ast(node->right, depth + 1);
-	} else if (node->type == AST_PRINT || node->type == AST_BLOCK) {
+	} else if (node->type == AST_PRINT || node->type == AST_BLOCK || node->type == AST_LOGICAL_NOT) {
 		print_ast(node->left, depth + 1);
 	} else if (node->type == AST_IF) {
 		print_ast(node->cond, depth + 1);

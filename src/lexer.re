@@ -106,9 +106,18 @@ int yylex() {
             yylval.str = strndup(tok, cursor - tok); 
             return T_IDENT;
         }
+        "&&" { update_location(tok, cursor); return T_AND; }
+        "||" { update_location(tok, cursor); return T_OR; }
+        "!=" { update_location(tok, cursor); return T_NEQ; }
+        "!" { update_location(tok, cursor); return T_NOT; }
         "==" { update_location(tok, cursor); return T_EQ; }
         "=" { update_location(tok, cursor); return T_ASSIGN; }
+        ">=" { update_location(tok, cursor); return T_GE; }
+        "<=" { update_location(tok, cursor); return T_LE; }
+        ">" { update_location(tok, cursor); return T_GT; }
         "<" { update_location(tok, cursor); return T_LT; }
+        "%" { update_location(tok, cursor); return T_MOD; }
+        "&" { update_location(tok, cursor); return T_AMP; }
         "+" { update_location(tok, cursor); return T_PLUS; }
         "-" { update_location(tok, cursor); return T_MINUS; }
         "*" { update_location(tok, cursor); return T_STAR; }
