@@ -16,6 +16,7 @@ static LLVMBuilderRef builder;
 #define MAX_LOCALS 100
 static LLVMValueRef local_vars[MAX_LOCALS];
 static char* local_names[MAX_LOCALS];
+static LLVMTypeRef local_types[MAX_LOCALS];
 static int local_count = 0;
 
 LLVMValueRef generate_node(ASTNode* node) {
@@ -41,19 +42,18 @@ LLVMValueRef generate_node(ASTNode* node) {
             return LLVMBuildGlobalStringPtr(builder, node->str_val, "regextmp");
 
         case AST_VAR: {
-            // 1. ローカル変数を後ろから探す
             for (int i = local_count - 1; i >= 1; i--) {
                 if (local_names[i] && strcmp(local_names[i], node->var_name) == 0) {
-                    return LLVMBuildLoad2(builder, LLVMInt32TypeInContext(context), local_vars[i], node->var_name);
+                    if (!local_vars[i] || !local_types[i]) return NULL;
+                    return LLVMBuildLoad2(builder, local_types[i], local_vars[i], node->var_name);
                 }
             }
-            // 2. なければグローバル変数
             LLVMValueRef var = LLVMGetNamedGlobal(module, node->var_name);
             if (!var) {
                 fprintf(stderr, "Ga! (Codegen Error): Unknown variable '%s'\n", node->var_name);
                 return NULL;
             }
-            return LLVMBuildLoad2(builder, LLVMInt32TypeInContext(context), var, node->var_name);
+            return LLVMBuildLoad2(builder, LLVMGlobalGetValueType(var), var, node->var_name);
         }
 
         case AST_VARDECL: {
@@ -76,6 +76,7 @@ LLVMValueRef generate_node(ASTNode* node) {
                 LLVMValueRef alloca_inst = LLVMBuildAlloca(builder, LLVMInt32TypeInContext(context), node->var_name);
                 local_names[local_count] = strdup(node->var_name);
                 local_vars[local_count] = alloca_inst;
+                local_types[local_count] = LLVMInt32TypeInContext(context);
                 local_count++;
                 LLVMBuildStore(builder, init_val, alloca_inst);
                 return init_val;
@@ -105,6 +106,7 @@ LLVMValueRef generate_node(ASTNode* node) {
                 LLVMValueRef alloca_inst = LLVMBuildAlloca(builder, ptr_type, name);
                 local_names[local_count] = strdup(name);
                 local_vars[local_count] = alloca_inst;
+                local_types[local_count] = ptr_type;
                 local_count++;
                 LLVMBuildStore(builder, ht_ptr, alloca_inst);
             } else {
@@ -167,6 +169,7 @@ LLVMValueRef generate_node(ASTNode* node) {
 
                 LLVMTypeRef ptr_type = LLVMPointerType(LLVMInt8TypeInContext(context), 0);
                 LLVMValueRef ht_ptr = LLVMBuildLoad2(builder, ptr_type, ht_var, var_name);
+                if (!ht_ptr) return NULL;
 
                 LLVMTypeRef param_types[] = { ptr_type, ptr_type };
                 LLVMTypeRef func_type = LLVMFunctionType(ptr_type, param_types, 2, 0);
@@ -187,6 +190,11 @@ LLVMValueRef generate_node(ASTNode* node) {
             }
 
             LLVMTypeRef array_type = LLVMGlobalGetValueType(array_var);
+            if (LLVMGetTypeKind(array_type) != LLVMArrayTypeKind) {
+                fprintf(stderr, "Ga! (Codegen Error): Variable '%s' is not an array\n", var_name);
+                return NULL;
+            }
+
             unsigned int const array_len = LLVMGetArrayLength(array_type);
             LLVMValueRef len_val = LLVMConstInt(LLVMInt32TypeInContext(context), array_len, 0);
 
@@ -517,16 +525,24 @@ LLVMValueRef generate_node(ASTNode* node) {
 
         case AST_THROW: {
             LLVMValueRef val = generate_node(node->left);
-            LLVMTypeRef param_types[] = { LLVMInt32TypeInContext(context) };
-            LLVMTypeRef throw_func_type = LLVMFunctionType(LLVMVoidTypeInContext(context), param_types, 1, 0);
-
-            LLVMValueRef throw_func = LLVMGetNamedFunction(module, "ginc_throw");
-            if (!throw_func) {
-                throw_func = LLVMAddFunction(module, "ginc_throw", throw_func_type);
+            if (!val) return NULL;
+            if (LLVMGetTypeKind(LLVMTypeOf(val)) == LLVMIntegerTypeKind) {
+                LLVMTypeRef param_types[] = { LLVMInt32TypeInContext(context) };
+                LLVMTypeRef func_type = LLVMFunctionType(LLVMVoidTypeInContext(context), param_types, 1, 0);
+                LLVMValueRef fn = LLVMGetNamedFunction(module, "ginc_throw_int");
+                if (!fn) {
+                    fn = LLVMAddFunction(module, "ginc_throw_int", func_type);
+                }
+                LLVMBuildCall2(builder, func_type, fn, &val, 1, "");
+            } else {
+                LLVMTypeRef param_types[] = { LLVMPointerType(LLVMInt8TypeInContext(context), 0) };
+                LLVMTypeRef func_type = LLVMFunctionType(LLVMVoidTypeInContext(context), param_types, 1, 0);
+                LLVMValueRef fn = LLVMGetNamedFunction(module, "ginc_throw_obj");
+                if (!fn) {
+                    fn = LLVMAddFunction(module, "ginc_throw_obj", func_type);
+                }
+                LLVMBuildCall2(builder, func_type, fn, &val, 1, "");
             }
-
-            LLVMValueRef args[] = { val };
-            LLVMBuildCall2(builder, throw_func_type, throw_func, args, 1, "");
             LLVMBuildUnreachable(builder);
             return NULL;
         }
@@ -597,6 +613,7 @@ LLVMValueRef generate_node(ASTNode* node) {
                 if (local_count > 0 && local_count < MAX_LOCALS) {
                     local_names[local_count] = strdup(node->var_name);
                     local_vars[local_count] = catch_var_alloca;
+                    local_types[local_count] = i32_type;
                     local_count++;
                 }
             }
@@ -668,30 +685,77 @@ LLVMValueRef generate_node(ASTNode* node) {
 
             // [catch_body]
             LLVMPositionBuilderAtEnd(builder, catch_bb);
-            if (node->right) {
-#if 0
-                if (node->var_name) {
-                    LLVMValueRef catch_var_alloca = NULL;
-                    if (local_count > 0) { // 関数内
-                        catch_var_alloca = LLVMBuildAlloca(builder, i32_type, node->var_name);
-                        if (local_count < MAX_LOCALS) {
-                            local_names[local_count] = strdup(node->var_name);
-                            local_vars[local_count] = catch_var_alloca;
-                            local_count++;
-                        }
-                    } else { // トップレベル
-                        catch_var_alloca = LLVMAddGlobal(module, i32_type, node->var_name);
-                        LLVMSetInitializer(catch_var_alloca, LLVMConstNull(i32_type));
-                    }
-                    LLVMBuildStore(builder, setjmp_res, catch_var_alloca);
+            LLVMBuildStore(builder, setjmp_res, rethrow_val);
+
+            ASTNode* curr_catch = node->right; // catch_blocks (AST_EXPR_LIST)
+            while (curr_catch) {
+                ASTNode* catch_node = curr_catch->left; // AST_CATCH_BLOCK
+
+                LLVMBasicBlockRef next_catch_bb = LLVMAppendBasicBlockInContext(context, func, "next_catch");
+                LLVMBasicBlockRef match_bb = LLVMAppendBasicBlockInContext(context, func, "catch_match");
+
+                LLVMValueRef catch_type_val = LLVMConstInt(i32_type, catch_node->catch_type, 0);
+                LLVMTypeRef check_param_types[] = { i32_type };
+                LLVMTypeRef check_func_type = LLVMFunctionType(i32_type, check_param_types, 1, 0);
+                LLVMValueRef check_fn = LLVMGetNamedFunction(module, "ginc_check_catch");
+                if (!check_fn) {
+                    check_fn = LLVMAddFunction(module, "ginc_check_catch", check_func_type);
                 }
-                generate_node(node->right);
-#endif
+                LLVMValueRef check_res = LLVMBuildCall2(builder, check_func_type, check_fn, &catch_type_val, 1, "check_res");
+                LLVMValueRef is_match = LLVMBuildICmp(builder, LLVMIntNE, check_res, zero, "is_match");
+                LLVMBuildCondBr(builder, is_match, match_bb, next_catch_bb);
+
+                // [match_bb]
+                LLVMPositionBuilderAtEnd(builder, match_bb);
+                LLVMBuildStore(builder, zero, rethrow_val);
+
+                LLVMValueRef exc_val;
+                if (catch_node->catch_type == TYPE_INT) {
+                    LLVMTypeRef get_func_type = LLVMFunctionType(i32_type, NULL, 0, 0);
+                    LLVMValueRef get_fn = LLVMGetNamedFunction(module, "ginc_get_exc_int");
+                    if (!get_fn) {
+                        get_fn = LLVMAddFunction(module, "ginc_get_exc_int", get_func_type);
+                    }
+                    exc_val = LLVMBuildCall2(builder, get_func_type, get_fn, NULL, 0, "exc_val");
+                } else {
+                    LLVMTypeRef get_func_type = LLVMFunctionType(ptr_type, NULL, 0, 0);
+                    LLVMValueRef get_fn = LLVMGetNamedFunction(module, "ginc_get_exc_obj");
+                    if (!get_fn) {
+                        get_fn = LLVMAddFunction(module, "ginc_get_exc_obj", get_func_type);
+                    }
+                    exc_val = LLVMBuildCall2(builder, get_func_type, get_fn, NULL, 0, "exc_val");
+                }
+
+                if (catch_node->var_name && exc_val) {
+                    int old_local_count = local_count;
+                    if (local_count == 0) local_count = 1;
+
+                    LLVMValueRef var_alloc = LLVMBuildAlloca(builder, LLVMTypeOf(exc_val), catch_node->var_name);
+                    if (var_alloc) {
+                        local_names[local_count] = strdup(catch_node->var_name);
+                        local_vars[local_count] = var_alloc;
+                        local_types[local_count] = LLVMTypeOf(exc_val);
+                        local_count++;
+
+                        LLVMBuildStore(builder, exc_val, var_alloc);
+                    }
+
+                    generate_node(catch_node->left);
+
+                    local_count = old_local_count;
+                } else {
+                    generate_node(catch_node->left);
+                }
+
                 if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(builder))) {
                     LLVMBuildBr(builder, finally_bb);
                 }
-            } else {
-                LLVMBuildStore(builder, setjmp_res, rethrow_val);
+
+                LLVMPositionBuilderAtEnd(builder, next_catch_bb);
+                curr_catch = curr_catch->right;
+            }
+
+            if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(builder))) {
                 LLVMBuildBr(builder, finally_bb);
             }
 
@@ -710,6 +774,11 @@ LLVMValueRef generate_node(ASTNode* node) {
             // [rethrow_bb]
             LLVMPositionBuilderAtEnd(builder, rethrow_bb);
             LLVMValueRef throw_fn = LLVMGetNamedFunction(module, "ginc_throw");
+            if (!throw_fn) {
+                LLVMTypeRef throw_param_types[] = { i32_type };
+                LLVMTypeRef throw_func_type = LLVMFunctionType(LLVMVoidTypeInContext(context), throw_param_types, 1, 0);
+                throw_fn = LLVMAddFunction(module, "ginc_throw", throw_func_type);
+            }
             LLVMBuildCall2(builder, LLVMGlobalGetValueType(throw_fn), throw_fn, &rv, 1, "");
             LLVMBuildUnreachable(builder);
 
@@ -782,6 +851,7 @@ LLVMValueRef generate_node(ASTNode* node) {
                 LLVMValueRef alloca_inst = LLVMBuildAlloca(builder, LLVMInt32TypeInContext(context), p_name);
                 local_names[local_count] = strdup(p_name);
                 local_vars[local_count] = alloca_inst;
+                local_types[local_count] = LLVMInt32TypeInContext(context);
                 local_count++;
                 
                 LLVMValueRef arg_val = LLVMGetParam(func, p_idx);
@@ -877,6 +947,21 @@ void generate_code(ASTNode* root) {
 
     int ginc_unwrap_int(void* val);
     LLVMAddSymbol("ginc_unwrap_int", (void*)ginc_unwrap_int);
+
+    void ginc_throw_int(int val);
+    LLVMAddSymbol("ginc_throw_int", (void*)ginc_throw_int);
+
+    void ginc_throw_obj(void* obj);
+    LLVMAddSymbol("ginc_throw_obj", (void*)ginc_throw_obj);
+
+    int ginc_check_catch(int target_type);
+    LLVMAddSymbol("ginc_check_catch", (void*)ginc_check_catch);
+
+    int ginc_get_exc_int(void);
+    LLVMAddSymbol("ginc_get_exc_int", (void*)ginc_get_exc_int);
+
+    void* ginc_get_exc_obj(void);
+    LLVMAddSymbol("ginc_get_exc_obj", (void*)ginc_get_exc_obj);
 
     LLVMExecutionEngineRef engine;
     LLVMLinkInMCJIT();

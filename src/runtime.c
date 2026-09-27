@@ -138,3 +138,35 @@ int ginc_unwrap_int(GincValue* val) {
 	if (val->type == VAL_STR) return atoi(val->data.s);
 	return 0;
 }
+
+// 例外レジスタ
+static int ginc_exc_type = 0; // 1: int, 2: obj (pointer)
+static int ginc_exc_int = 0;
+static void* ginc_exc_obj = NULL;
+
+void ginc_throw_int(int val) {
+	ginc_exc_type = 1;
+	ginc_exc_int = val;
+	ginc_throw(1);
+}
+
+void ginc_throw_obj(void* obj) {
+	ginc_exc_type = 2;
+	ginc_exc_obj = obj;
+	ginc_throw(1);
+}
+
+int ginc_check_catch(int target_type) {
+	// target_type: TYPE_INT(0), TYPE_STR(1), TYPE_VAR(2)
+	if (target_type == 0 && ginc_exc_type == 1) return 1;
+	if (target_type == 2 && ginc_exc_type == 2) return 1;
+	return 0;
+}
+
+int ginc_get_exc_int() {
+	return ginc_exc_int;
+}
+
+void* ginc_get_exc_obj() {
+	return ginc_exc_obj;
+}
