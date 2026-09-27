@@ -92,6 +92,9 @@ LLVMValueRef generate_node(ASTNode* node) {
         case AST_NUM:
             return LLVMConstInt(LLVMInt32TypeInContext(context), node->val, 0);
 
+        case AST_FLOAT:
+            return LLVMConstReal(LLVMDoubleTypeInContext(context), node->float_val);
+
         case AST_NULL: {
             LLVMTypeRef ptr_type = LLVMPointerType(LLVMInt8TypeInContext(context), 0);
             LLVMTypeRef func_type = LLVMFunctionType(ptr_type, NULL, 0, 0);
@@ -144,17 +147,21 @@ LLVMValueRef generate_node(ASTNode* node) {
                 init_val = LLVMBuildCall2(builder, unwrap_type, unwrap_func, args, 1, "unwrapped");
             }
 
+            LLVMTypeRef var_llvm_type = (node->var_type == TYPE_DOUBLE)
+                ? LLVMDoubleTypeInContext(context)
+                : LLVMTypeOf(init_val);
+
             if (local_count > 0) { // 関数内のローカル変数
-                LLVMValueRef alloca_inst = LLVMBuildAlloca(builder, LLVMInt32TypeInContext(context), node->var_name);
+                LLVMValueRef alloca_inst = LLVMBuildAlloca(builder, var_llvm_type, node->var_name);
                 local_names[local_count] = strdup(node->var_name);
                 local_vars[local_count] = alloca_inst;
-                local_types[local_count] = LLVMInt32TypeInContext(context);
+                local_types[local_count] = var_llvm_type;
                 local_count++;
                 LLVMBuildStore(builder, init_val, alloca_inst);
                 return init_val;
             } else { // グローバル変数
-                LLVMValueRef var = LLVMAddGlobal(module, LLVMTypeOf(init_val), node->var_name);
-                LLVMSetInitializer(var, LLVMConstNull(LLVMTypeOf(init_val)));
+                LLVMValueRef var = LLVMAddGlobal(module, var_llvm_type, node->var_name);
+                LLVMSetInitializer(var, LLVMConstNull(var_llvm_type));
                 LLVMBuildStore(builder, init_val, var);
                 return init_val;
             }
@@ -427,6 +434,13 @@ LLVMValueRef generate_node(ASTNode* node) {
                     if (!mk_func) mk_func = LLVMAddFunction(module, "ginc_make_int", mk_func_type);
                     LLVMValueRef args[] = { rhs_val };
                     boxed_val = LLVMBuildCall2(builder, mk_func_type, mk_func, args, 1, "boxed_int");
+                } else if (LLVMGetTypeKind(LLVMTypeOf(rhs_val)) == LLVMDoubleTypeKind) {
+                    LLVMTypeRef param_types[] = { LLVMDoubleTypeInContext(context) };
+                    LLVMTypeRef mk_func_type = LLVMFunctionType(ptr_type, param_types, 1, 0);
+                    LLVMValueRef mk_func = LLVMGetNamedFunction(module, "ginc_make_double");
+                    if (!mk_func) mk_func = LLVMAddFunction(module, "ginc_make_double", mk_func_type);
+                    LLVMValueRef args[] = { rhs_val };
+                    boxed_val = LLVMBuildCall2(builder, mk_func_type, mk_func, args, 1, "boxed_double");
                 } else if (LLVMGetTypeKind(LLVMTypeOf(rhs_val)) == LLVMPointerTypeKind && LLVMIsAFunction(rhs_val)) {
                     LLVMTypeRef param_types[] = { ptr_type };
                     LLVMTypeRef mk_func_type = LLVMFunctionType(ptr_type, param_types, 1, 0);
@@ -585,7 +599,11 @@ LLVMValueRef generate_node(ASTNode* node) {
             if (!printf_func) {
                 printf_func = LLVMAddFunction(module, "printf", printf_type);
             }
-            LLVMValueRef format_str = LLVMBuildGlobalStringPtr(builder, "%d\n", "fmt");
+            char const* fmt_str_val = "%d\n";
+            if (LLVMGetTypeKind(LLVMTypeOf(arg_val)) == LLVMDoubleTypeKind) {
+                fmt_str_val = "%f\n";
+            }
+            LLVMValueRef format_str = LLVMBuildGlobalStringPtr(builder, fmt_str_val, "fmt");
             LLVMValueRef args[] = { format_str, arg_val };
             return LLVMBuildCall2(builder, printf_type, printf_func, args, 2, "printf_call");
         }
@@ -1194,6 +1212,12 @@ void generate_code(ASTNode* root) {
 
     void* ginc_make_int(int v);
     LLVMAddSymbol("ginc_make_int", (void*)ginc_make_int);
+
+    void* ginc_make_double(double v);
+    LLVMAddSymbol("ginc_make_double", (void*)ginc_make_double);
+
+    double ginc_unwrap_double(void* val);
+    LLVMAddSymbol("ginc_unwrap_double", (void*)ginc_unwrap_double);
 
     void* ginc_make_str(char const* v);
     LLVMAddSymbol("ginc_make_str", (void*)ginc_make_str);

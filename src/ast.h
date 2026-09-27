@@ -4,11 +4,13 @@
 typedef enum {
 	TYPE_INT,
 	TYPE_STR,
-	TYPE_VAR
+	TYPE_VAR,
+	TYPE_DOUBLE
 } GincType;
 
 typedef enum {
 	AST_NUM,
+	AST_FLOAT,
 	AST_NULL,
 	AST_STR,
 	AST_STRING,
@@ -54,6 +56,7 @@ struct ASTNode {
 	ASTNodeType type;
 	GincType var_type; // 変数の型用
 	int val;           // 数値用
+	double float_val;  // 浮動小数点数用
 	char* var_name;    // 変数名用
 	char* str_val;     // 文字列リテラル用
 	ASTNode* left;     // 左辺
@@ -70,6 +73,7 @@ struct ASTNode {
 };
 
 extern ASTNode* make_num_node(int val);
+extern ASTNode* make_float_node(double val);
 extern ASTNode* make_str_node(char* str_val);
 extern ASTNode* make_string_node(char* str);
 extern ASTNode* make_regex_node(char* pattern);

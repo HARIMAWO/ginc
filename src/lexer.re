@@ -37,6 +37,7 @@ int yylex() {
         LINE_COMMENT = "//" [^\x00\n]*;
         BLOCK_COMMENT = "/*" ([^*] | ("*" [^/]))* "*"+ "/";
         NUM = [0-9]+;
+        FLOAT = [0-9]+ "." [0-9]+;
         IDENT = [a-zA-Z_][a-zA-Z0-9_]*;
         STR = "\"" [^"\x00\n]* "\"";
         REGEX = "/" [^/\x00\n]+ "/";
@@ -51,6 +52,11 @@ int yylex() {
         LINE_COMMENT { update_location(tok, cursor); continue; }
         BLOCK_COMMENT { update_location(tok, cursor); continue; }
 
+        FLOAT {
+            update_location(tok, cursor);
+            yylval.float_val = atof(tok);
+            return T_FLOAT_LITERAL;
+        }
         NUM {
             update_location(tok, cursor);
             // strtolは数字以外の文字(スペースやセミコロン)で勝手に止まるため安全
@@ -75,6 +81,7 @@ int yylex() {
         "null" { update_location(tok, cursor); return T_NULL; }
         "var" { update_location(tok, cursor); return T_VAR_TYPE; }
         "int" { update_location(tok, cursor); return T_INT_TYPE; }
+        "double" { update_location(tok, cursor); return T_DOUBLE_TYPE; }
         "str" { update_location(tok, cursor); return T_STR_TYPE; }
         "class" { update_location(tok, cursor); return T_CLASS; }
         "struct" { update_location(tok, cursor); return T_STRUCT; }
