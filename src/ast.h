@@ -64,6 +64,8 @@ struct ASTNode {
 	ASTNode* finally_body; // finally節
 	GincType catch_type;   // catchブロックの型用
 	char* catch_class_name; // Exceptionなどのクラス名用
+	int access;            // 0: private, 1: public
+	char* class_name;      // メソッドが所属するクラス名用
 };
 
 extern ASTNode* make_num_node(int val);

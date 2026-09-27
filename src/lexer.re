@@ -74,13 +74,10 @@ int yylex() {
         "int" { update_location(tok, cursor); return T_INT_TYPE; }
         "str" { update_location(tok, cursor); return T_STR_TYPE; }
         "class" { update_location(tok, cursor); return T_CLASS; }
-        "struct" | "union" {
-            char* keyword = strndup(tok, cursor - tok);
-            fprintf(stderr, "%s:%d:%d: Ga! (Warning): '%s' is an alias for 'class'. Use 'class' instead.\n", current_filename, current_line, current_column, keyword);
-            free(keyword);
-            update_location(tok, cursor);
-            return T_CLASS;
-        }
+        "struct" { update_location(tok, cursor); return T_STRUCT; }
+        "public" { update_location(tok, cursor); return T_PUBLIC; }
+        "private" { update_location(tok, cursor); return T_PRIVATE; }
+        ":" { update_location(tok, cursor); return T_COLON; }
         "try" { update_location(tok, cursor); return T_TRY; }
         "catch" { update_location(tok, cursor); return T_CATCH; }
         "finally" { update_location(tok, cursor); return T_FINALLY; }

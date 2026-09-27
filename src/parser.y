@@ -8,6 +8,7 @@ int yylex(void);
 void yyerror(const char *s);
 ASTNode* root_node;
 static char current_class[256] = "";
+static int current_access = 0;
 %}
 
 %union {
@@ -18,9 +19,9 @@ static char current_class[256] = "";
 
 %token <num> T_NUM
 %token <str> T_IDENT T_STR T_STRING T_REGEX
-%token T_INT_TYPE T_STR_TYPE T_VAR_TYPE T_ASSIGN T_PLUS T_MINUS T_STAR T_SLASH T_SEMI T_PRINT T_LPAREN T_RPAREN T_IF T_ELSE T_WHILE T_LBRACE T_RBRACE T_EQ T_LT T_MATCH T_LBRACKET T_RBRACKET T_COMMA T_RETURN T_TRY T_CATCH T_THROW T_FINALLY T_DOT T_CLASS
+%token T_INT_TYPE T_STR_TYPE T_VAR_TYPE T_ASSIGN T_PLUS T_MINUS T_STAR T_SLASH T_SEMI T_PRINT T_LPAREN T_RPAREN T_IF T_ELSE T_WHILE T_LBRACE T_RBRACE T_EQ T_LT T_MATCH T_LBRACKET T_RBRACKET T_COMMA T_RETURN T_TRY T_CATCH T_THROW T_FINALLY T_DOT T_CLASS T_STRUCT T_PUBLIC T_PRIVATE T_COLON
 
-%type <ast> stmt_list stmt expr expr_list param_list param_decl member_decl member_list class_def class_member class_member_list finally_clause func_body catch_block catch_list
+%type <ast> stmt_list stmt expr expr_list param_list param_decl member_decl member_list class_def class_member class_item class_member_list finally_clause func_body catch_block catch_list
 
 %left T_MATCH
 %left T_EQ T_LT
@@ -68,14 +69,16 @@ member_list:
     ;
 
 class_member:
-    member_decl
+    member_decl {
+        $$ = $1;
+    }
     | T_INT_TYPE T_IDENT T_LPAREN param_list T_RPAREN func_body {
         if (strlen(current_class) > 0) {
             char func_name[512];
             sprintf(func_name, "%s_%s", current_class, $2);
             ASTNode* this_param = make_param_decl_node(TYPE_VAR, "this");
             ASTNode* this_list = make_expr_list_node(this_param, $4);
-            $$ = make_func_decl_node(TYPE_INT, func_name, this_list, $6);
+            $$ = make_func_decl_node(TYPE_INT, strdup(func_name), this_list, $6);
             $$->str_val = strdup($2);
         } else {
             $$ = make_func_decl_node(TYPE_INT, $2, $4, $6);
@@ -84,13 +87,31 @@ class_member:
     }
     ;
 
+class_item:
+    T_PUBLIC T_COLON { current_access = 1; $$ = NULL; }
+    | T_PRIVATE T_COLON { current_access = 0; $$ = NULL; }
+    | class_member {
+        $$ = $1;
+        if ($$) {
+            $$->access = current_access;
+            if (strlen(current_class) > 0 && $$->type == AST_FUNC_DECL) {
+                $$->class_name = strdup(current_class);
+            }
+        }
+    }
+    ;
+
 class_member_list:
     /* empty */ { $$ = NULL; }
-    | class_member class_member_list { $$ = make_expr_list_node($1, $2); }
+    | class_item class_member_list { $$ = $1 ? make_expr_list_node($1, $2) : $2; }
     ;
 
 class_def:
-    T_CLASS T_IDENT { strcpy(current_class, $2); } T_LBRACE class_member_list T_RBRACE T_SEMI {
+    T_CLASS T_IDENT { strcpy(current_class, $2); current_access = 0; } T_LBRACE class_member_list T_RBRACE T_SEMI {
+        $$ = make_class_def_node($2, $5);
+        current_class[0] = '\0';
+    }
+    | T_STRUCT T_IDENT { strcpy(current_class, $2); current_access = 1; } T_LBRACE class_member_list T_RBRACE T_SEMI {
         $$ = make_class_def_node($2, $5);
         current_class[0] = '\0';
     }
@@ -156,6 +177,9 @@ stmt:
         $$ = $1;
     }
     | T_CLASS T_IDENT T_IDENT T_SEMI {
+        $$ = make_class_var_decl_node($2, $3);
+    }
+    | T_STRUCT T_IDENT T_IDENT T_SEMI {
         $$ = make_class_var_decl_node($2, $3);
     }
     | T_IDENT T_DOT T_IDENT T_ASSIGN expr T_SEMI {

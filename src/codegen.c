@@ -17,17 +17,53 @@ static LLVMBuilderRef builder;
 static LLVMValueRef local_vars[MAX_LOCALS];
 static char* local_names[MAX_LOCALS];
 static LLVMTypeRef local_types[MAX_LOCALS];
+static char* local_classes[MAX_LOCALS];
 static int local_count = 0;
+
+static char* global_var_names[100];
+static char* global_classes[100];
+static int global_var_count = 0;
+
+static char current_codegen_class[256] = "";
 
 typedef struct {
 	char* class_name;
 	char* method_keys[50];
 	char* method_funcs[50];
 	int method_count;
+	char* keys[100];
+	int access[100]; // 0: private, 1: public
+	int count;
 } ClassMeta;
 
 static ClassMeta class_meta[50];
 static int class_meta_count = 0;
+
+static void check_access(char const* target_class, char const* member_name) {
+	for (int i = 0; i < class_meta_count; i++) {
+		if (strcmp(class_meta[i].class_name, target_class) == 0) {
+			for (int m = 0; m < class_meta[i].count; m++) {
+				if (strcmp(class_meta[i].keys[m], member_name) == 0) {
+					if (class_meta[i].access[m] == 0 && strcmp(current_codegen_class, target_class) != 0) {
+						fprintf(stderr, "Ga! (Compile Error): '%s' is a private member of '%s'\n", member_name, target_class);
+						exit(1);
+					}
+					return;
+				}
+			}
+		}
+	}
+}
+
+static char* get_class_of_var(char const* var_name) {
+	for (int i = local_count - 1; i >= 1; i--) {
+		if (local_names[i] && strcmp(local_names[i], var_name) == 0) return local_classes[i];
+	}
+	for (int i = 0; i < global_var_count; i++) {
+		if (global_var_names[i] && strcmp(global_var_names[i], var_name) == 0) return global_classes[i];
+	}
+	return NULL;
+}
 
 static LLVMValueRef auto_unwrap(LLVMValueRef val) {
 	if (!val) return NULL;
@@ -120,13 +156,22 @@ LLVMValueRef generate_node(ASTNode* node) {
             ClassMeta meta;
             meta.class_name = strdup(node->var_name);
             meta.method_count = 0;
+            meta.count = 0;
             ASTNode* curr = node->left; // class_member_list
             while (curr) {
-                if (curr->left && curr->left->type == AST_FUNC_DECL) {
-                    meta.method_keys[meta.method_count] = strdup(curr->left->str_val);
-                    meta.method_funcs[meta.method_count] = strdup(curr->left->var_name);
-                    meta.method_count++;
-                    generate_node(curr->left); // メソッドの実体をLLVMに生成
+                if (curr->left) {
+                    if (curr->left->type == AST_FUNC_DECL || curr->left->type == AST_PARAM_DECL) {
+                        char const* const mkey = (curr->left->type == AST_FUNC_DECL) ? curr->left->str_val : curr->left->var_name;
+                        meta.keys[meta.count] = strdup(mkey);
+                        meta.access[meta.count] = curr->left->access;
+                        meta.count++;
+                    }
+                    if (curr->left->type == AST_FUNC_DECL) {
+                        meta.method_keys[meta.method_count] = strdup(curr->left->str_val);
+                        meta.method_funcs[meta.method_count] = strdup(curr->left->var_name);
+                        meta.method_count++;
+                        generate_node(curr->left);
+                    }
                 }
                 curr = curr->right;
             }
@@ -147,12 +192,17 @@ LLVMValueRef generate_node(ASTNode* node) {
                 local_names[local_count] = strdup(name);
                 local_vars[local_count] = alloca_inst;
                 local_types[local_count] = ptr_type;
+                local_classes[local_count] = strdup(node->str_val);
                 local_count++;
                 LLVMBuildStore(builder, ht_ptr, alloca_inst);
             } else {
                 LLVMValueRef var = LLVMAddGlobal(module, ptr_type, name);
                 LLVMSetInitializer(var, LLVMConstNull(ptr_type));
                 LLVMBuildStore(builder, ht_ptr, var);
+
+                global_var_names[global_var_count] = strdup(name);
+                global_classes[global_var_count] = strdup(node->str_val);
+                global_var_count++;
             }
 
             for (int i = 0; i < class_meta_count; i++) {
@@ -245,6 +295,15 @@ LLVMValueRef generate_node(ASTNode* node) {
 
             char const* const var_name = node->var_name;
 
+            char const* target_class = get_class_of_var(var_name);
+            if (target_class) {
+                if (node->left && node->left->type == AST_STR) {
+                    check_access(target_class, node->left->var_name);
+                } else if (node->left && node->left->type == AST_STRING) {
+                    check_access(target_class, node->left->str_val);
+                }
+            }
+
             if (LLVMGetTypeKind(LLVMTypeOf(idx_val)) == LLVMPointerTypeKind) {
                 // ハッシュアクセス (GincValue* を返す)
                 LLVMValueRef ht_var = NULL;
@@ -325,6 +384,15 @@ LLVMValueRef generate_node(ASTNode* node) {
             if (!idx_val || !rhs_val) return NULL;
 
             char const* const var_name = node->var_name;
+
+            char const* target_class = get_class_of_var(var_name);
+            if (target_class) {
+                if (node->left && node->left->type == AST_STR) {
+                    check_access(target_class, node->left->var_name);
+                } else if (node->left && node->left->type == AST_STRING) {
+                    check_access(target_class, node->left->str_val);
+                }
+            }
 
             if (LLVMGetTypeKind(LLVMTypeOf(idx_val)) == LLVMPointerTypeKind) {
                 // ハッシュキー代入 (GincValue* へボクシングして格納)
@@ -896,6 +964,11 @@ LLVMValueRef generate_node(ASTNode* node) {
             char const* const obj_name = node->var_name;
             char const* const method_name = node->str_val;
 
+            char const* target_class = get_class_of_var(obj_name);
+            if (target_class) {
+                check_access(target_class, method_name);
+            }
+
             LLVMValueRef ht_var = NULL;
             for (int i = local_count - 1; i >= 1; i--) {
                 if (local_names[i] && strcmp(local_names[i], obj_name) == 0) {
@@ -990,6 +1063,12 @@ LLVMValueRef generate_node(ASTNode* node) {
         }
 
         case AST_FUNC_DECL: {
+            char old_class[256];
+            strcpy(old_class, current_codegen_class);
+            if (node->class_name) {
+                strcpy(current_codegen_class, node->class_name);
+            }
+
             int param_count = 0;
             ASTNode* curr_param = node->left; // params (AST_EXPR_LIST)
             while (curr_param) { param_count++; curr_param = curr_param->right; }
@@ -1026,6 +1105,11 @@ LLVMValueRef generate_node(ASTNode* node) {
                 local_names[local_count] = strdup(p_name);
                 local_vars[local_count] = alloca_inst;
                 local_types[local_count] = param_types[p_idx];
+                if (p_idx == 0 && strcmp(p_name, "this") == 0 && node->class_name) {
+                    local_classes[local_count] = strdup(node->class_name);
+                } else {
+                    local_classes[local_count] = NULL;
+                }
                 local_count++;
                 
                 LLVMValueRef arg_val = LLVMGetParam(func, p_idx);
@@ -1044,6 +1128,7 @@ LLVMValueRef generate_node(ASTNode* node) {
             }
             
             local_count = old_local_count;
+            strcpy(current_codegen_class, old_class);
             LLVMPositionBuilderAtEnd(builder, old_bb);
             return NULL;
         }
