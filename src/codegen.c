@@ -19,6 +19,16 @@ static char* local_names[MAX_LOCALS];
 static LLVMTypeRef local_types[MAX_LOCALS];
 static int local_count = 0;
 
+typedef struct {
+	char* class_name;
+	char* method_keys[50];
+	char* method_funcs[50];
+	int method_count;
+} ClassMeta;
+
+static ClassMeta class_meta[50];
+static int class_meta_count = 0;
+
 static LLVMValueRef auto_unwrap(LLVMValueRef val) {
 	if (!val) return NULL;
 	if (LLVMGetTypeKind(LLVMTypeOf(val)) == LLVMPointerTypeKind) {
@@ -106,8 +116,72 @@ LLVMValueRef generate_node(ASTNode* node) {
             }
         }
 
-        case AST_CLASS_DEF:
+        case AST_CLASS_DEF: {
+            ClassMeta meta;
+            meta.class_name = strdup(node->var_name);
+            meta.method_count = 0;
+            ASTNode* curr = node->left; // class_member_list
+            while (curr) {
+                if (curr->left && curr->left->type == AST_FUNC_DECL) {
+                    meta.method_keys[meta.method_count] = strdup(curr->left->str_val);
+                    meta.method_funcs[meta.method_count] = strdup(curr->left->var_name);
+                    meta.method_count++;
+                    generate_node(curr->left); // メソッドの実体をLLVMに生成
+                }
+                curr = curr->right;
+            }
+            class_meta[class_meta_count++] = meta;
             return NULL;
+        }
+
+        case AST_CLASS_VAR_DECL: {
+            LLVMTypeRef ptr_type = LLVMPointerType(LLVMInt8TypeInContext(context), 0);
+            LLVMTypeRef func_type = LLVMFunctionType(ptr_type, NULL, 0, 0);
+            LLVMValueRef create_func = LLVMGetNamedFunction(module, "ginc_hash_create");
+            if (!create_func) create_func = LLVMAddFunction(module, "ginc_hash_create", func_type);
+            LLVMValueRef ht_ptr = LLVMBuildCall2(builder, func_type, create_func, NULL, 0, "ht");
+
+            char const* const name = node->var_name;
+            if (local_count > 0) {
+                LLVMValueRef alloca_inst = LLVMBuildAlloca(builder, ptr_type, name);
+                local_names[local_count] = strdup(name);
+                local_vars[local_count] = alloca_inst;
+                local_types[local_count] = ptr_type;
+                local_count++;
+                LLVMBuildStore(builder, ht_ptr, alloca_inst);
+            } else {
+                LLVMValueRef var = LLVMAddGlobal(module, ptr_type, name);
+                LLVMSetInitializer(var, LLVMConstNull(ptr_type));
+                LLVMBuildStore(builder, ht_ptr, var);
+            }
+
+            for (int i = 0; i < class_meta_count; i++) {
+                if (strcmp(class_meta[i].class_name, node->str_val) == 0) {
+                    for (int m = 0; m < class_meta[i].method_count; m++) {
+                        LLVMValueRef method_fn = LLVMGetNamedFunction(module, class_meta[i].method_funcs[m]);
+                        if (!method_fn) continue;
+                        
+                        LLVMTypeRef mk_param_types[] = { ptr_type };
+                        LLVMTypeRef mk_func_type = LLVMFunctionType(ptr_type, mk_param_types, 1, 0);
+                        LLVMValueRef mk_func = LLVMGetNamedFunction(module, "ginc_make_func");
+                        if (!mk_func) mk_func = LLVMAddFunction(module, "ginc_make_func", mk_func_type);
+                        
+                        LLVMValueRef boxed_func = LLVMBuildCall2(builder, mk_func_type, mk_func, &method_fn, 1, "boxed_func");
+                        
+                        LLVMValueRef key_str = LLVMBuildGlobalStringPtr(builder, class_meta[i].method_keys[m], "method_key");
+                        LLVMTypeRef set_param_types[] = { ptr_type, ptr_type, ptr_type };
+                        LLVMTypeRef set_func_type = LLVMFunctionType(LLVMVoidTypeInContext(context), set_param_types, 3, 0);
+                        LLVMValueRef set_func = LLVMGetNamedFunction(module, "ginc_hash_set");
+                        if (!set_func) set_func = LLVMAddFunction(module, "ginc_hash_set", set_func_type);
+                        
+                        LLVMValueRef args[] = { ht_ptr, key_str, boxed_func };
+                        LLVMBuildCall2(builder, set_func_type, set_func, args, 3, "");
+                    }
+                    break;
+                }
+            }
+            return ht_ptr;
+        }
 
         case AST_HASH_DECL: {
             LLVMTypeRef ptr_type = LLVMPointerType(LLVMInt8TypeInContext(context), 0);

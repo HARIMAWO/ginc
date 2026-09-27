@@ -1,11 +1,13 @@
 %{
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "ast.h"
 
 int yylex(void);
 void yyerror(const char *s);
 ASTNode* root_node;
+static char current_class[256] = "";
 %}
 
 %union {
@@ -18,7 +20,7 @@ ASTNode* root_node;
 %token <str> T_IDENT T_STR T_STRING T_REGEX
 %token T_INT_TYPE T_STR_TYPE T_VAR_TYPE T_ASSIGN T_PLUS T_MINUS T_STAR T_SLASH T_SEMI T_PRINT T_LPAREN T_RPAREN T_IF T_ELSE T_WHILE T_LBRACE T_RBRACE T_EQ T_LT T_MATCH T_LBRACKET T_RBRACKET T_COMMA T_RETURN T_TRY T_CATCH T_THROW T_FINALLY T_DOT T_CLASS
 
-%type <ast> stmt_list stmt expr expr_list param_list param_decl member_decl member_list finally_clause func_body catch_block catch_list
+%type <ast> stmt_list stmt expr expr_list param_list param_decl member_decl member_list class_def class_member class_member_list finally_clause func_body catch_block catch_list
 
 %left T_MATCH
 %left T_EQ T_LT
@@ -63,6 +65,35 @@ member_decl:
 member_list:
     /* empty */ { $$ = NULL; }
     | member_decl member_list { $$ = make_expr_list_node($1, $2); }
+    ;
+
+class_member:
+    member_decl
+    | T_INT_TYPE T_IDENT T_LPAREN param_list T_RPAREN func_body {
+        if (strlen(current_class) > 0) {
+            char func_name[512];
+            sprintf(func_name, "%s_%s", current_class, $2);
+            ASTNode* this_param = make_param_decl_node(TYPE_VAR, "this");
+            ASTNode* this_list = make_expr_list_node(this_param, $4);
+            $$ = make_func_decl_node(TYPE_INT, func_name, this_list, $6);
+            $$->str_val = strdup($2);
+        } else {
+            $$ = make_func_decl_node(TYPE_INT, $2, $4, $6);
+            $$->str_val = strdup($2);
+        }
+    }
+    ;
+
+class_member_list:
+    /* empty */ { $$ = NULL; }
+    | class_member class_member_list { $$ = make_expr_list_node($1, $2); }
+    ;
+
+class_def:
+    T_CLASS T_IDENT { strcpy(current_class, $2); } T_LBRACE class_member_list T_RBRACE T_SEMI {
+        $$ = make_class_def_node($2, $5);
+        current_class[0] = '\0';
+    }
     ;
 
 finally_clause:
@@ -121,11 +152,11 @@ stmt:
     | T_THROW expr T_SEMI {
         $$ = make_throw_node($2);
     }
-    | T_CLASS T_IDENT T_LBRACE member_list T_RBRACE T_SEMI {
-        $$ = make_class_def_node($2, $4);
+    | class_def {
+        $$ = $1;
     }
     | T_CLASS T_IDENT T_IDENT T_SEMI {
-        $$ = make_hash_decl_node(TYPE_INT, $3, TYPE_STR);
+        $$ = make_class_var_decl_node($2, $3);
     }
     | T_IDENT T_DOT T_IDENT T_ASSIGN expr T_SEMI {
         $$ = make_index_assign_node($1, make_string_node($3), $5);

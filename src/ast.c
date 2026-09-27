@@ -214,6 +214,14 @@ ASTNode* make_class_def_node(char* name, ASTNode* members) {
 	return node;
 }
 
+ASTNode* make_class_var_decl_node(char* class_name, char* var_name) {
+	ASTNode* node = malloc(sizeof(ASTNode));
+	node->type = AST_CLASS_VAR_DECL;
+	node->str_val = class_name;
+	node->var_name = var_name;
+	return node;
+}
+
 ASTNode* make_method_call_node(char* obj_name, char* method_name, ASTNode* args) {
 	ASTNode* node = malloc(sizeof(ASTNode));
 	node->type = AST_METHOD_CALL;
@@ -268,6 +276,7 @@ void print_ast(ASTNode* node, int depth) {
 		case AST_HASH_DECL: printf("HASH_DECL(%s)\n", node->var_name); break;
 		case AST_INDEX_ASSIGN: printf("INDEX_ASSIGN(%s)\n", node->var_name); break;
 		case AST_CLASS_DEF: printf("CLASS_DEF(%s)\n", node->var_name); break;
+		case AST_CLASS_VAR_DECL: printf("CLASS_VAR_DECL(%s %s)\n", node->str_val, node->var_name); break;
 		case AST_CATCH_BLOCK:
 			printf("CATCH_BLOCK(type:%d, class:%s, var:%s)\n", node->catch_type, node->catch_class_name ? node->catch_class_name : "NULL", node->var_name ? node->var_name : "NULL");
 			break;
