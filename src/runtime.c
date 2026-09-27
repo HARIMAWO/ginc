@@ -60,7 +60,7 @@ char* ginc_str_concat(char const* const s1, char const* const s2) {
 }
 
 #define HASH_SIZE 128
-typedef enum { VAL_INT, VAL_STR, VAL_FUNC } ValType;
+typedef enum { VAL_INT, VAL_STR, VAL_FUNC, VAL_NULL } ValType;
 typedef struct { ValType type; union { int i; char* s; void* f; } data; } GincValue;
 typedef struct HashNode { char* key; GincValue* value; struct HashNode* next; } HashNode;
 typedef struct { HashNode* buckets[HASH_SIZE]; } HashTable;
@@ -74,6 +74,12 @@ unsigned long ginc_hash_func(char const* str) {
 
 void* ginc_hash_create() {
 	return calloc(1, sizeof(HashTable));
+}
+
+GincValue* ginc_make_null() {
+	GincValue* val = malloc(sizeof(GincValue));
+	val->type = VAL_NULL;
+	return val;
 }
 
 GincValue* ginc_make_int(int v) {
@@ -108,7 +114,9 @@ void ginc_print_val(GincValue* val) {
 		printf("null\n");
 		return;
 	}
-	if (val->type == VAL_INT) {
+	if (val->type == VAL_NULL) {
+		printf("null\n");
+	} else if (val->type == VAL_INT) {
 		printf("%d\n", val->data.i);
 	} else if (val->type == VAL_STR) {
 		printf("%s\n", val->data.s);
@@ -147,6 +155,7 @@ GincValue* ginc_hash_get(void* ht_ptr, char const* key) {
 
 int ginc_unwrap_int(GincValue* val) {
 	if (!val) return 0;
+	if (val->type == VAL_NULL) return 0;
 	if (val->type == VAL_INT) return val->data.i;
 	if (val->type == VAL_STR) return atoi(val->data.s);
 	return 0;

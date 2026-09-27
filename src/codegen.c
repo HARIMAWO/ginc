@@ -94,7 +94,10 @@ LLVMValueRef generate_node(ASTNode* node) {
 
         case AST_NULL: {
             LLVMTypeRef ptr_type = LLVMPointerType(LLVMInt8TypeInContext(context), 0);
-            return LLVMConstNull(ptr_type);
+            LLVMTypeRef func_type = LLVMFunctionType(ptr_type, NULL, 0, 0);
+            LLVMValueRef null_func = LLVMGetNamedFunction(module, "ginc_make_null");
+            if (!null_func) null_func = LLVMAddFunction(module, "ginc_make_null", func_type);
+            return LLVMBuildCall2(builder, func_type, null_func, NULL, 0, "boxed_null");
         }
 
         case AST_STR:
@@ -417,9 +420,7 @@ LLVMValueRef generate_node(ASTNode* node) {
                 LLVMValueRef ht_ptr = LLVMBuildLoad2(builder, ptr_type, ht_var, var_name);
 
                 LLVMValueRef boxed_val = NULL;
-                if (LLVMGetTypeKind(LLVMTypeOf(rhs_val)) == LLVMPointerTypeKind && LLVMIsNull(rhs_val)) {
-                    boxed_val = rhs_val; // 型がポインタかつNULLの場合のみ、そのままハッシュに入れる
-                } else if (LLVMGetTypeKind(LLVMTypeOf(rhs_val)) == LLVMIntegerTypeKind) {
+                if (LLVMGetTypeKind(LLVMTypeOf(rhs_val)) == LLVMIntegerTypeKind) {
                     LLVMTypeRef param_types[] = { LLVMInt32TypeInContext(context) };
                     LLVMTypeRef mk_func_type = LLVMFunctionType(ptr_type, param_types, 1, 0);
                     LLVMValueRef mk_func = LLVMGetNamedFunction(module, "ginc_make_int");
@@ -434,12 +435,7 @@ LLVMValueRef generate_node(ASTNode* node) {
                     LLVMValueRef args[] = { rhs_val };
                     boxed_val = LLVMBuildCall2(builder, mk_func_type, mk_func, args, 1, "boxed_func");
                 } else {
-                    LLVMTypeRef param_types[] = { ptr_type };
-                    LLVMTypeRef mk_func_type = LLVMFunctionType(ptr_type, param_types, 1, 0);
-                    LLVMValueRef mk_func = LLVMGetNamedFunction(module, "ginc_make_str");
-                    if (!mk_func) mk_func = LLVMAddFunction(module, "ginc_make_str", mk_func_type);
-                    LLVMValueRef args[] = { rhs_val };
-                    boxed_val = LLVMBuildCall2(builder, mk_func_type, mk_func, args, 1, "boxed_str");
+                    boxed_val = rhs_val; // null (ginc_make_null) も文字列も、既にBoxedなポインタなのでそのまま代入
                 }
 
                 LLVMTypeRef set_param_types[] = { ptr_type, ptr_type, ptr_type };
@@ -620,21 +616,10 @@ LLVMValueRef generate_node(ASTNode* node) {
 
         case AST_EQ:
         case AST_LT: {
-            LLVMValueRef lhs = generate_node(node->left);
-            LLVMValueRef rhs = generate_node(node->right);
+            LLVMValueRef lhs = auto_unwrap(generate_node(node->left));
+            LLVMValueRef rhs = auto_unwrap(generate_node(node->right));
             if (!lhs || !rhs) return NULL;
-            
-            int const lhs_is_ptr = (LLVMGetTypeKind(LLVMTypeOf(lhs)) == LLVMPointerTypeKind);
-            int const rhs_is_ptr = (LLVMGetTypeKind(LLVMTypeOf(rhs)) == LLVMPointerTypeKind);
-            
-            if (lhs_is_ptr && rhs_is_ptr) {
-                LLVMIntPredicate pred = (node->type == AST_EQ) ? LLVMIntEQ : LLVMIntULT;
-                LLVMValueRef cmp = LLVMBuildICmp(builder, pred, lhs, rhs, "ptrcmptmp");
-                return LLVMBuildZExt(builder, cmp, LLVMInt32TypeInContext(context), "ptrzexttmp");
-            }
-            
-            lhs = auto_unwrap(lhs);
-            rhs = auto_unwrap(rhs);
+
             LLVMIntPredicate pred = (node->type == AST_EQ) ? LLVMIntEQ : LLVMIntSLT;
             LLVMValueRef cmp = LLVMBuildICmp(builder, pred, lhs, rhs, "cmptmp");
             return LLVMBuildZExt(builder, cmp, LLVMInt32TypeInContext(context), "zexttmp");
@@ -1203,6 +1188,9 @@ void generate_code(ASTNode* root) {
 
     void* ginc_hash_create(void);
     LLVMAddSymbol("ginc_hash_create", (void*)ginc_hash_create);
+
+    void* ginc_make_null(void);
+    LLVMAddSymbol("ginc_make_null", (void*)ginc_make_null);
 
     void* ginc_make_int(int v);
     LLVMAddSymbol("ginc_make_int", (void*)ginc_make_int);
