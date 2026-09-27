@@ -48,6 +48,10 @@ typedef struct {
 static FuncMeta func_meta[100];
 static int func_meta_count = 0;
 
+static LLVMBasicBlockRef loop_cond_stack[20];
+static LLVMBasicBlockRef loop_end_stack[20];
+static int loop_depth = 0;
+
 static void check_access(char const* target_class, char const* member_name) {
 	for (int i = 0; i < class_meta_count; i++) {
 		if (strcmp(class_meta[i].class_name, target_class) == 0) {
@@ -141,18 +145,20 @@ LLVMValueRef generate_node(ASTNode* node) {
         }
 
         case AST_VARDECL: {
-            LLVMValueRef init_val = node->right ? generate_node(node->right) : NULL;
-
-            if (init_val && LLVMGetTypeKind(LLVMTypeOf(init_val)) == LLVMPointerTypeKind && !LLVMIsAFunction(init_val) && node->var_type == TYPE_INT) {
-                LLVMTypeRef ptr_type = LLVMPointerType(LLVMInt8TypeInContext(context), 0);
-                LLVMTypeRef param_types[] = { ptr_type };
-                LLVMTypeRef unwrap_type = LLVMFunctionType(LLVMInt32TypeInContext(context), param_types, 1, 0);
-                LLVMValueRef unwrap_func = LLVMGetNamedFunction(module, "ginc_unwrap_int");
-                if (!unwrap_func) {
-                    unwrap_func = LLVMAddFunction(module, "ginc_unwrap_int", unwrap_type);
+            LLVMValueRef init_val = NULL;
+            if (node->right) {
+                init_val = generate_node(node->right);
+                if (init_val && LLVMGetTypeKind(LLVMTypeOf(init_val)) == LLVMPointerTypeKind && !LLVMIsAFunction(init_val) && node->var_type == TYPE_INT) {
+                    LLVMTypeRef ptr_type = LLVMPointerType(LLVMInt8TypeInContext(context), 0);
+                    LLVMTypeRef param_types[] = { ptr_type };
+                    LLVMTypeRef unwrap_type = LLVMFunctionType(LLVMInt32TypeInContext(context), param_types, 1, 0);
+                    LLVMValueRef unwrap_func = LLVMGetNamedFunction(module, "ginc_unwrap_int");
+                    if (!unwrap_func) {
+                        unwrap_func = LLVMAddFunction(module, "ginc_unwrap_int", unwrap_type);
+                    }
+                    LLVMValueRef args[] = { init_val };
+                    init_val = LLVMBuildCall2(builder, unwrap_type, unwrap_func, args, 1, "unwrapped");
                 }
-                LLVMValueRef args[] = { init_val };
-                init_val = LLVMBuildCall2(builder, unwrap_type, unwrap_func, args, 1, "unwrapped");
             }
 
             LLVMTypeRef var_llvm_type;
@@ -161,11 +167,17 @@ LLVMValueRef generate_node(ASTNode* node) {
             } else if (node->var_type == TYPE_FILE || node->var_type == TYPE_STR || node->var_type == TYPE_VAR) {
                 var_llvm_type = LLVMPointerType(LLVMInt8TypeInContext(context), 0);
             } else {
-                var_llvm_type = init_val ? LLVMTypeOf(init_val) : LLVMInt32TypeInContext(context);
+                var_llvm_type = LLVMInt32TypeInContext(context);
             }
 
             if (!init_val) {
-                init_val = LLVMConstNull(var_llvm_type);
+                if (node->var_type == TYPE_DOUBLE) {
+                    init_val = LLVMConstReal(LLVMDoubleTypeInContext(context), 0.0);
+                } else if (node->var_type == TYPE_FILE || node->var_type == TYPE_STR || node->var_type == TYPE_VAR) {
+                    init_val = LLVMConstNull(LLVMPointerType(LLVMInt8TypeInContext(context), 0));
+                } else {
+                    init_val = LLVMConstInt(LLVMInt32TypeInContext(context), 0, 0);
+                }
             }
 
             if (local_count > 0) { // 関数内のローカル変数
@@ -564,6 +576,52 @@ LLVMValueRef generate_node(ASTNode* node) {
             return LLVMBuildNeg(builder, val, "negtmp");
         }
 
+        case AST_POST_INC:
+        case AST_POST_DEC: {
+            char const* const var_name = node->left->var_name;
+            LLVMValueRef var = NULL;
+            LLVMTypeRef var_type = NULL;
+
+            for (int i = local_count - 1; i >= 1; i--) {
+                if (local_names[i] && strcmp(local_names[i], var_name) == 0) {
+                    var = local_vars[i];
+                    var_type = local_types[i];
+                    break;
+                }
+            }
+            if (!var) {
+                var = LLVMGetNamedGlobal(module, var_name);
+                if (var) var_type = LLVMGlobalGetValueType(var);
+            }
+            if (!var || !var_type) {
+                fprintf(stderr, "Ga! (Codegen Error): Unknown variable '%s'\n", var_name);
+                return NULL;
+            }
+
+            LLVMValueRef old_val = LLVMBuildLoad2(builder, var_type, var, "post_old");
+            LLVMValueRef new_val = NULL;
+
+            if (LLVMGetTypeKind(var_type) == LLVMDoubleTypeKind) {
+                LLVMValueRef one = LLVMConstReal(var_type, 1.0);
+                if (node->type == AST_POST_INC) {
+                    new_val = LLVMBuildFAdd(builder, old_val, one, "finc_tmp");
+                } else {
+                    new_val = LLVMBuildFSub(builder, old_val, one, "fdec_tmp");
+                }
+            } else {
+                LLVMValueRef old_unwrapped = auto_unwrap(old_val);
+                LLVMValueRef one = LLVMConstInt(LLVMInt32TypeInContext(context), 1, 0);
+                if (node->type == AST_POST_INC) {
+                    new_val = LLVMBuildAdd(builder, old_unwrapped, one, "inc_tmp");
+                } else {
+                    new_val = LLVMBuildSub(builder, old_unwrapped, one, "dec_tmp");
+                }
+            }
+
+            LLVMBuildStore(builder, new_val, var);
+            return old_val;
+        }
+
         case AST_MUL: {
             LLVMValueRef lhs = auto_unwrap(generate_node(node->left));
             LLVMValueRef rhs = auto_unwrap(generate_node(node->right));
@@ -778,13 +836,65 @@ LLVMValueRef generate_node(ASTNode* node) {
 
             // ループ本体ブロック
             LLVMPositionBuilderAtEnd(builder, loop_bb);
+            if (loop_depth < 20) {
+                loop_cond_stack[loop_depth] = cond_bb;
+                loop_end_stack[loop_depth] = after_bb;
+                loop_depth++;
+            }
             generate_node(node->then_body);
-            LLVMBuildBr(builder, cond_bb);
+            if (loop_depth > 0) loop_depth--;
+
+            if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(builder))) {
+                LLVMBuildBr(builder, cond_bb);
+            }
 
             // ループ脱出後
             LLVMPositionBuilderAtEnd(builder, after_bb);
             return NULL;
         }
+
+        case AST_DO_WHILE: {
+            LLVMValueRef current_function = LLVMGetBasicBlockParent(LLVMGetInsertBlock(builder));
+            LLVMBasicBlockRef body_block = LLVMAppendBasicBlockInContext(context, current_function, "dobody");
+            LLVMBasicBlockRef cond_block = LLVMAppendBasicBlockInContext(context, current_function, "docond");
+            LLVMBasicBlockRef end_block = LLVMAppendBasicBlockInContext(context, current_function, "doend");
+
+            LLVMBuildBr(builder, body_block);
+            LLVMPositionBuilderAtEnd(builder, body_block);
+
+            if (loop_depth < 20) {
+                loop_cond_stack[loop_depth] = cond_block;
+                loop_end_stack[loop_depth] = end_block;
+                loop_depth++;
+            }
+            if (node->left) generate_node(node->left);
+            if (loop_depth > 0) loop_depth--;
+
+            if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(builder))) {
+                LLVMBuildBr(builder, cond_block);
+            }
+
+            LLVMPositionBuilderAtEnd(builder, cond_block);
+            LLVMValueRef cond = auto_unwrap(generate_node(node->right));
+            LLVMValueRef zero = LLVMConstInt(LLVMTypeOf(cond), 0, 0);
+            LLVMValueRef cmp = LLVMBuildICmp(builder, LLVMIntNE, cond, zero, "docmp");
+            LLVMBuildCondBr(builder, cmp, body_block, end_block);
+
+            LLVMPositionBuilderAtEnd(builder, end_block);
+            return NULL;
+        }
+
+        case AST_BREAK:
+            if (loop_depth > 0) {
+                LLVMBuildBr(builder, loop_end_stack[loop_depth - 1]);
+            }
+            return NULL;
+
+        case AST_CONTINUE:
+            if (loop_depth > 0) {
+                LLVMBuildBr(builder, loop_cond_stack[loop_depth - 1]);
+            }
+            return NULL;
 
         case AST_FOR: {
             LLVMValueRef current_function = LLVMGetBasicBlockParent(LLVMGetInsertBlock(builder));
@@ -799,15 +909,29 @@ LLVMValueRef generate_node(ASTNode* node) {
 
             // 条件判定ブロック
             LLVMPositionBuilderAtEnd(builder, cond_block);
-            LLVMValueRef cond = auto_unwrap(generate_node(node->cond));
+            LLVMValueRef cond;
+            if (node->cond) {
+                cond = auto_unwrap(generate_node(node->cond));
+            } else {
+                cond = LLVMConstInt(LLVMInt32TypeInContext(context), 1, 0);
+            }
             LLVMValueRef zero = LLVMConstInt(LLVMTypeOf(cond), 0, 0);
             LLVMValueRef cmp = LLVMBuildICmp(builder, LLVMIntNE, cond, zero, "loopcond");
             LLVMBuildCondBr(builder, cmp, body_block, end_block);
 
             // 本体ブロック
             LLVMPositionBuilderAtEnd(builder, body_block);
+            if (loop_depth < 20) {
+                loop_cond_stack[loop_depth] = inc_block;
+                loop_end_stack[loop_depth] = end_block;
+                loop_depth++;
+            }
             generate_node(node->then_branch);
-            LLVMBuildBr(builder, inc_block);
+            if (loop_depth > 0) loop_depth--;
+
+            if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(builder))) {
+                LLVMBuildBr(builder, inc_block);
+            }
 
             // インクリメントブロック
             LLVMPositionBuilderAtEnd(builder, inc_block);

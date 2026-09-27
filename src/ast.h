@@ -23,6 +23,8 @@ typedef enum {
 	AST_ADD,
 	AST_SUB,
 	AST_UNARY_MINUS,
+	AST_POST_INC,
+	AST_POST_DEC,
 	AST_MUL,
 	AST_DIV,
 	AST_MOD,
@@ -38,7 +40,10 @@ typedef enum {
 	AST_BLOCK,
 	AST_IF,
 	AST_WHILE,
+	AST_DO_WHILE,
 	AST_FOR,
+	AST_BREAK,
+	AST_CONTINUE,
 	AST_EQ,
 	AST_LT,
 	AST_MATCH,
@@ -97,6 +102,9 @@ extern ASTNode* make_unary_node(ASTNodeType type, ASTNode* expr);
 extern ASTNode* make_print_node(ASTNode* arg);
 extern ASTNode* make_if_node(ASTNode* cond, ASTNode* then_body, ASTNode* else_body);
 extern ASTNode* make_while_node(ASTNode* cond, ASTNode* body);
+extern ASTNode* make_do_while_node(ASTNode* body, ASTNode* cond);
+extern ASTNode* make_break_node(void);
+extern ASTNode* make_continue_node(void);
 extern ASTNode* make_for_node(ASTNode* init, ASTNode* cond, ASTNode* inc, ASTNode* body);
 extern ASTNode* make_block_node(ASTNode* stmt_list);
 extern ASTNode* make_array_decl_node(GincType type, char* name, int max_size, ASTNode* init_list);

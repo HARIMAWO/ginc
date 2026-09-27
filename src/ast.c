@@ -95,6 +95,30 @@ ASTNode* make_while_node(ASTNode* cond, ASTNode* body) {
 	return node;
 }
 
+ASTNode* make_do_while_node(ASTNode* body, ASTNode* cond) {
+	ASTNode* node = malloc(sizeof(ASTNode));
+	node->type = AST_DO_WHILE;
+	node->left = body;
+	node->right = cond;
+	return node;
+}
+
+ASTNode* make_break_node(void) {
+	ASTNode* node = malloc(sizeof(ASTNode));
+	node->type = AST_BREAK;
+	node->left = NULL;
+	node->right = NULL;
+	return node;
+}
+
+ASTNode* make_continue_node(void) {
+	ASTNode* node = malloc(sizeof(ASTNode));
+	node->type = AST_CONTINUE;
+	node->left = NULL;
+	node->right = NULL;
+	return node;
+}
+
 ASTNode* make_for_node(ASTNode* init, ASTNode* cond, ASTNode* inc, ASTNode* body) {
 	ASTNode* node = malloc(sizeof(ASTNode));
 	node->type = AST_FOR;
@@ -280,6 +304,8 @@ void print_ast(ASTNode* node, int depth) {
 		case AST_ADD:    printf("+\n"); break;
 		case AST_SUB:    printf("-\n"); break;
 		case AST_UNARY_MINUS: printf("UNARY -\n"); break;
+		case AST_POST_INC: printf("POST ++\n"); break;
+		case AST_POST_DEC: printf("POST --\n"); break;
 		case AST_MUL:    printf("*\n"); break;
 		case AST_DIV:    printf("/\n"); break;
 		case AST_MOD:    printf("%%\n"); break;
@@ -295,7 +321,10 @@ void print_ast(ASTNode* node, int depth) {
 		case AST_BLOCK:  printf("BLOCK\n"); break;
 		case AST_IF:     printf("IF\n"); break;
 		case AST_WHILE:  printf("WHILE\n"); break;
+		case AST_DO_WHILE: printf("DO_WHILE\n"); break;
 		case AST_FOR:    printf("FOR\n"); break;
+		case AST_BREAK:  printf("BREAK\n"); break;
+		case AST_CONTINUE: printf("CONTINUE\n"); break;
 		case AST_EQ:     printf("==\n"); break;
 		case AST_LT:     printf("<\n"); break;
 		case AST_MATCH:  printf("=~\n"); break;
@@ -339,6 +368,9 @@ void print_ast(ASTNode* node, int depth) {
 	} else if (node->type == AST_WHILE) {
 		print_ast(node->cond, depth + 1);
 		print_ast(node->then_body, depth + 1);
+	} else if (node->type == AST_DO_WHILE) {
+		if (node->left) print_ast(node->left, depth + 1);
+		if (node->right) print_ast(node->right, depth + 1);
 	} else if (node->type == AST_FOR) {
 		if (node->left) print_ast(node->left, depth + 1);
 		if (node->cond) print_ast(node->cond, depth + 1);
@@ -354,7 +386,7 @@ void print_ast(ASTNode* node, int depth) {
 	} else if (node->type == AST_FUNC_DECL) {
 		if (node->left) print_ast(node->left, depth + 1);
 		if (node->body) print_ast(node->body, depth + 1);
-	} else if (node->type == AST_FUNC_CALL || node->type == AST_METHOD_CALL || node->type == AST_RETURN || node->type == AST_THROW || node->type == AST_UNARY_MINUS) {
+	} else if (node->type == AST_FUNC_CALL || node->type == AST_METHOD_CALL || node->type == AST_RETURN || node->type == AST_THROW || node->type == AST_UNARY_MINUS || node->type == AST_POST_INC || node->type == AST_POST_DEC) {
 		if (node->left) print_ast(node->left, depth + 1);
 	} else if (node->type == AST_TRY) {
 		if (node->then_body) print_ast(node->then_body, depth + 1);

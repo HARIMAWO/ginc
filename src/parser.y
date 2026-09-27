@@ -21,9 +21,9 @@ static int current_access = 0;
 %token <num> T_NUM
 %token <float_val> T_FLOAT_LITERAL
 %token <str> T_IDENT T_STR T_STRING T_REGEX
-%token T_INT_TYPE T_STR_TYPE T_VAR_TYPE T_DOUBLE_TYPE T_ASSIGN T_PLUS T_MINUS T_STAR T_SLASH T_SEMI T_PRINT T_LPAREN T_RPAREN T_IF T_ELSE T_WHILE T_LBRACE T_RBRACE T_EQ T_LT T_MATCH T_LBRACKET T_RBRACKET T_COMMA T_RETURN T_TRY T_CATCH T_THROW T_FINALLY T_DOT T_CLASS T_STRUCT T_PUBLIC T_PRIVATE T_COLON T_TRUE T_FALSE T_NULL T_VOID T_CHAR T_FILE T_AND T_OR T_NOT T_NEQ T_GT T_LE T_GE T_MOD T_AMP T_FOR
+%token T_INT_TYPE T_STR_TYPE T_VAR_TYPE T_DOUBLE_TYPE T_ASSIGN T_PLUS T_MINUS T_STAR T_SLASH T_SEMI T_PRINT T_LPAREN T_RPAREN T_IF T_ELSE T_WHILE T_LBRACE T_RBRACE T_EQ T_LT T_MATCH T_LBRACKET T_RBRACKET T_COMMA T_RETURN T_TRY T_CATCH T_THROW T_FINALLY T_DOT T_CLASS T_STRUCT T_PUBLIC T_PRIVATE T_COLON T_TRUE T_FALSE T_NULL T_VOID T_CHAR T_FILE T_AND T_OR T_NOT T_NEQ T_GT T_LE T_GE T_MOD T_AMP T_FOR T_INC T_DEC T_DO T_BREAK T_CONTINUE
 
-%type <ast> stmt_list stmt expr expr_list param_list param_decl member_decl member_list class_def class_member class_item class_member_list finally_clause func_body catch_block catch_list
+%type <ast> stmt_list stmt expr expr_list param_list param_decl member_decl member_list class_def class_member class_item class_member_list finally_clause func_body catch_block catch_list opt_expr for_init
 
 %right T_ASSIGN
 %left T_OR
@@ -32,7 +32,7 @@ static int current_access = 0;
 %left T_LT T_LE T_GT T_GE T_MATCH
 %left T_PLUS T_MINUS
 %left T_STAR T_SLASH T_MOD
-%right UMINUS T_NOT USTAR UAMP
+%right UMINUS T_NOT USTAR UAMP T_INC T_DEC
 %left T_DOT T_LBRACKET T_LPAREN
 
 %%
@@ -78,6 +78,20 @@ member_decl:
 member_list:
     /* empty */ { $$ = NULL; }
     | member_decl member_list { $$ = make_expr_list_node($1, $2); }
+    ;
+
+opt_expr:
+    /* empty */ { $$ = NULL; }
+    | expr { $$ = $1; }
+    ;
+
+for_init:
+    /* empty */ { $$ = NULL; }
+    | expr { $$ = $1; }
+    | T_INT_TYPE T_IDENT T_ASSIGN expr { $$ = make_vardecl_node(TYPE_INT, $2, $4); }
+    | T_STR_TYPE T_IDENT T_ASSIGN expr { $$ = make_vardecl_node(TYPE_STR, $2, $4); }
+    | T_DOUBLE_TYPE T_IDENT T_ASSIGN expr { $$ = make_vardecl_node(TYPE_DOUBLE, $2, $4); }
+    | T_VAR_TYPE T_IDENT T_ASSIGN expr { $$ = make_vardecl_node(TYPE_VAR, $2, $4); }
     ;
 
 class_member:
@@ -212,6 +226,18 @@ stmt:
     | T_INT_TYPE T_IDENT T_LBRACKET T_NUM T_RBRACKET T_ASSIGN T_LBRACE expr_list T_RBRACE T_SEMI {
         $$ = make_array_decl_node(TYPE_INT, $2, $4, $8);
     }
+    | T_INT_TYPE T_IDENT T_SEMI {
+        $$ = make_vardecl_node(TYPE_INT, $2, NULL);
+    }
+    | T_STR_TYPE T_IDENT T_SEMI {
+        $$ = make_vardecl_node(TYPE_STR, $2, NULL);
+    }
+    | T_DOUBLE_TYPE T_IDENT T_SEMI {
+        $$ = make_vardecl_node(TYPE_DOUBLE, $2, NULL);
+    }
+    | T_VAR_TYPE T_IDENT T_SEMI {
+        $$ = make_vardecl_node(TYPE_VAR, $2, NULL);
+    }
     | T_INT_TYPE T_IDENT T_ASSIGN expr T_SEMI {
         $$ = make_vardecl_node(TYPE_INT, $2, $4);
     }
@@ -242,7 +268,16 @@ stmt:
     | T_WHILE T_LPAREN expr T_RPAREN stmt {
         $$ = make_while_node($3, $5);
     }
-    | T_FOR T_LPAREN expr T_SEMI expr T_SEMI expr T_RPAREN stmt {
+    | T_DO stmt T_WHILE T_LPAREN expr T_RPAREN T_SEMI {
+        $$ = make_do_while_node($2, $5);
+    }
+    | T_BREAK T_SEMI {
+        $$ = make_break_node();
+    }
+    | T_CONTINUE T_SEMI {
+        $$ = make_continue_node();
+    }
+    | T_FOR T_LPAREN for_init T_SEMI opt_expr T_SEMI opt_expr T_RPAREN stmt {
         $$ = make_for_node($3, $5, $7, $9);
     }
     | expr T_SEMI {
@@ -251,7 +286,11 @@ stmt:
     ;
 
 expr:
-    T_IDENT T_ASSIGN expr { $$ = make_binop_node(AST_ASSIGN, make_var_node($1), $3); }
+    T_INC T_IDENT { $$ = make_binop_node(AST_ASSIGN, make_var_node($2), make_binop_node(AST_ADD, make_var_node($2), make_num_node(1))); }
+    | T_DEC T_IDENT { $$ = make_binop_node(AST_ASSIGN, make_var_node($2), make_binop_node(AST_SUB, make_var_node($2), make_num_node(1))); }
+    | T_IDENT T_INC { $$ = make_unary_node(AST_POST_INC, make_var_node($1)); }
+    | T_IDENT T_DEC { $$ = make_unary_node(AST_POST_DEC, make_var_node($1)); }
+    | T_IDENT T_ASSIGN expr { $$ = make_binop_node(AST_ASSIGN, make_var_node($1), $3); }
     | T_IDENT T_DOT T_IDENT T_ASSIGN expr { $$ = make_index_assign_node($1, make_string_node($3), $5); }
     | T_IDENT T_LBRACKET expr T_RBRACKET T_ASSIGN expr { $$ = make_index_assign_node($1, $3, $6); }
     | T_NUM { $$ = make_num_node($1); }

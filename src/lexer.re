@@ -97,6 +97,11 @@ int yylex() {
         "throw" { update_location(tok, cursor); return T_THROW; }
         "if" { update_location(tok, cursor); return T_IF; }
         "else" { update_location(tok, cursor); return T_ELSE; }
+        "++" { update_location(tok, cursor); return T_INC; }
+        "--" { update_location(tok, cursor); return T_DEC; }
+        "do" { update_location(tok, cursor); return T_DO; }
+        "break" { update_location(tok, cursor); return T_BREAK; }
+        "continue" { update_location(tok, cursor); return T_CONTINUE; }
         "while" { update_location(tok, cursor); return T_WHILE; }
         "for" { update_location(tok, cursor); return T_FOR; }
         "return" { update_location(tok, cursor); return T_RETURN; }
