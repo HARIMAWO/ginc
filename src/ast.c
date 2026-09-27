@@ -238,6 +238,7 @@ void print_ast(ASTNode* node, int depth) {
 	
 	switch (node->type) {
 		case AST_NUM:    printf("NUM(%d)\n", node->val); break;
+		case AST_NULL:   printf("NULL\n"); break;
 		case AST_STR:    printf("STR(\"%s\")\n", node->var_name); break;
 		case AST_STRING: printf("STR(\"%s\")\n", node->str_val); break;
 		case AST_REGEX:  printf("REGEX(/%s/)\n", node->str_val); break;

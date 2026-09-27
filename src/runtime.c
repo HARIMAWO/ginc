@@ -84,6 +84,7 @@ GincValue* ginc_make_int(int v) {
 }
 
 GincValue* ginc_make_str(char const* v) {
+	if (!v) return NULL;
 	GincValue* val = malloc(sizeof(GincValue));
 	val->type = VAL_STR;
 	val->data.s = strdup(v);

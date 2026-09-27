@@ -9,6 +9,7 @@ typedef enum {
 
 typedef enum {
 	AST_NUM,
+	AST_NULL,
 	AST_STR,
 	AST_STRING,
 	AST_REGEX,
