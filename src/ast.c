@@ -95,6 +95,16 @@ ASTNode* make_while_node(ASTNode* cond, ASTNode* body) {
 	return node;
 }
 
+ASTNode* make_for_node(ASTNode* init, ASTNode* cond, ASTNode* inc, ASTNode* body) {
+	ASTNode* node = malloc(sizeof(ASTNode));
+	node->type = AST_FOR;
+	node->left = init;
+	node->cond = cond;
+	node->right = inc;
+	node->then_branch = body;
+	return node;
+}
+
 ASTNode* make_block_node(ASTNode* stmt_list) {
 	ASTNode* node = malloc(sizeof(ASTNode));
 	node->type = AST_BLOCK;
@@ -285,6 +295,7 @@ void print_ast(ASTNode* node, int depth) {
 		case AST_BLOCK:  printf("BLOCK\n"); break;
 		case AST_IF:     printf("IF\n"); break;
 		case AST_WHILE:  printf("WHILE\n"); break;
+		case AST_FOR:    printf("FOR\n"); break;
 		case AST_EQ:     printf("==\n"); break;
 		case AST_LT:     printf("<\n"); break;
 		case AST_MATCH:  printf("=~\n"); break;
@@ -328,6 +339,11 @@ void print_ast(ASTNode* node, int depth) {
 	} else if (node->type == AST_WHILE) {
 		print_ast(node->cond, depth + 1);
 		print_ast(node->then_body, depth + 1);
+	} else if (node->type == AST_FOR) {
+		if (node->left) print_ast(node->left, depth + 1);
+		if (node->cond) print_ast(node->cond, depth + 1);
+		if (node->right) print_ast(node->right, depth + 1);
+		if (node->then_branch) print_ast(node->then_branch, depth + 1);
 	} else if (node->type == AST_ARRAY_DECL) {
 		print_ast(node->right, depth + 1);
 	} else if (node->type == AST_ARRAY_ACCESS || node->type == AST_EXPR_LIST) {

@@ -38,6 +38,7 @@ typedef enum {
 	AST_BLOCK,
 	AST_IF,
 	AST_WHILE,
+	AST_FOR,
 	AST_EQ,
 	AST_LT,
 	AST_MATCH,
@@ -74,6 +75,7 @@ struct ASTNode {
 	ASTNode* right;    // 右辺
 	ASTNode* cond;     // 条件式
 	ASTNode* then_body;// then節
+	ASTNode* then_branch; // then節(forループ等用)
 	ASTNode* else_body;// else節
 	ASTNode* body;     // 関数本体用
 	ASTNode* finally_body; // finally節
@@ -95,6 +97,7 @@ extern ASTNode* make_unary_node(ASTNodeType type, ASTNode* expr);
 extern ASTNode* make_print_node(ASTNode* arg);
 extern ASTNode* make_if_node(ASTNode* cond, ASTNode* then_body, ASTNode* else_body);
 extern ASTNode* make_while_node(ASTNode* cond, ASTNode* body);
+extern ASTNode* make_for_node(ASTNode* init, ASTNode* cond, ASTNode* inc, ASTNode* body);
 extern ASTNode* make_block_node(ASTNode* stmt_list);
 extern ASTNode* make_array_decl_node(GincType type, char* name, int max_size, ASTNode* init_list);
 extern ASTNode* make_array_access_node(char* name, ASTNode* index);

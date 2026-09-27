@@ -786,6 +786,39 @@ LLVMValueRef generate_node(ASTNode* node) {
             return NULL;
         }
 
+        case AST_FOR: {
+            LLVMValueRef current_function = LLVMGetBasicBlockParent(LLVMGetInsertBlock(builder));
+            if (node->left) generate_node(node->left); // init
+
+            LLVMBasicBlockRef cond_block = LLVMAppendBasicBlockInContext(context, current_function, "forcond");
+            LLVMBasicBlockRef body_block = LLVMAppendBasicBlockInContext(context, current_function, "forbody");
+            LLVMBasicBlockRef inc_block = LLVMAppendBasicBlockInContext(context, current_function, "forinc");
+            LLVMBasicBlockRef end_block = LLVMAppendBasicBlockInContext(context, current_function, "forend");
+
+            LLVMBuildBr(builder, cond_block);
+
+            // 条件判定ブロック
+            LLVMPositionBuilderAtEnd(builder, cond_block);
+            LLVMValueRef cond = auto_unwrap(generate_node(node->cond));
+            LLVMValueRef zero = LLVMConstInt(LLVMTypeOf(cond), 0, 0);
+            LLVMValueRef cmp = LLVMBuildICmp(builder, LLVMIntNE, cond, zero, "loopcond");
+            LLVMBuildCondBr(builder, cmp, body_block, end_block);
+
+            // 本体ブロック
+            LLVMPositionBuilderAtEnd(builder, body_block);
+            generate_node(node->then_branch);
+            LLVMBuildBr(builder, inc_block);
+
+            // インクリメントブロック
+            LLVMPositionBuilderAtEnd(builder, inc_block);
+            if (node->right) generate_node(node->right); // inc
+            LLVMBuildBr(builder, cond_block);
+
+            // 終了ブロック
+            LLVMPositionBuilderAtEnd(builder, end_block);
+            return NULL;
+        }
+
         case AST_EXPR_LIST:
             return NULL;
 
