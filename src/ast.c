@@ -280,6 +280,117 @@ ASTNode* make_method_call_node(char* obj_name, char* method_name, ASTNode* args)
 	return node;
 }
 
+static TypeAlias* type_alias_list_head = NULL;
+
+static char const* const reserved_keywords[] = {
+	"int", "str", "var", "double", "void", "char", "FILE",
+	"if", "else", "while", "do", "for", "break", "continue",
+	"return", "try", "catch", "throw", "finally",
+	"class", "struct", "public", "private", "print",
+	"true", "false", "null", "typedef", NULL
+};
+
+int is_reserved_keyword(char const* name) {
+	if (!name) return 0;
+	for (int i = 0; reserved_keywords[i] != NULL; i++) {
+		if (strcmp(reserved_keywords[i], name) == 0) {
+			return 1;
+		}
+	}
+	return 0;
+}
+
+int is_typedef_name(char const* name) {
+	int is_found = 0;
+	resolve_type_alias(name, &is_found);
+	return is_found;
+}
+
+void register_type_alias_ext(GincType base_type, char const* alias, char const* target_str) {
+	if (is_reserved_keyword(alias)) {
+		fprintf(stderr, "%s:%d:%d: Ga! (Compile Error): Cannot use keyword '%s' as a typedef name\n", current_filename, current_line, current_column, alias);
+		exit(1);
+	}
+
+	TypeAlias* curr = type_alias_list_head;
+	while (curr) {
+		if (strcmp(curr->alias, alias) == 0) {
+			int same_base = (curr->base_type == base_type);
+			int same_target = 0;
+			if (curr->target_type_str == NULL && target_str == NULL) {
+				same_target = 1;
+			} else if (curr->target_type_str && target_str) {
+				same_target = (strcmp(curr->target_type_str, target_str) == 0);
+			}
+
+			if (same_base && same_target) {
+				// 重複定義であるが完全一致（多重インクルード等）のためエラーにせずスルー
+				return;
+			} else {
+				fprintf(stderr, "%s:%d:%d: Ga! (Compile Error): Conflicting types for typedef '%s'\n", current_filename, current_line, current_column, alias);
+				exit(1);
+			}
+		}
+		curr = curr->next;
+	}
+
+	TypeAlias* new_node = malloc(sizeof(TypeAlias));
+	new_node->alias = strdup(alias);
+	new_node->base_type = base_type;
+	new_node->target_type_str = target_str ? strdup(target_str) : NULL;
+	new_node->next = type_alias_list_head;
+	type_alias_list_head = new_node;
+}
+
+void register_type_alias(GincType base_type, char const* alias) {
+	register_type_alias_ext(base_type, alias, NULL);
+}
+
+GincType resolve_type_alias(char const* name, int* is_found) {
+	TypeAlias* curr = type_alias_list_head;
+	while (curr) {
+		if (strcmp(curr->alias, name) == 0) {
+			if (is_found) *is_found = 1;
+			if (curr->base_type == TYPE_ALIAS && curr->target_type_str) {
+				return resolve_type_alias(curr->target_type_str, is_found);
+			}
+			return curr->base_type;
+		}
+		curr = curr->next;
+	}
+	if (is_found) *is_found = 0;
+	return TYPE_INT;
+}
+
+ASTNode* make_typedef_node(GincType base_type, char* alias) {
+	register_type_alias_ext(base_type, alias, NULL);
+	ASTNode* node = malloc(sizeof(ASTNode));
+	node->type = AST_TYPEDEF;
+	node->var_type = base_type;
+	node->var_name = alias;
+	return node;
+}
+
+ASTNode* make_typedef_ext_node(GincType base_type, char* alias, char* target_str) {
+	register_type_alias_ext(base_type, alias, target_str);
+	ASTNode* node = malloc(sizeof(ASTNode));
+	node->type = AST_TYPEDEF;
+	node->var_type = base_type;
+	node->var_name = alias;
+	node->str_val = target_str ? strdup(target_str) : NULL;
+	return node;
+}
+
+ASTNode* make_typedef_node_from_user_type(char const* user_type_name, char* new_alias) {
+	int found = 0;
+	GincType bt = resolve_type_alias(user_type_name, &found);
+	if (found) {
+		return make_typedef_ext_node(bt, new_alias, (char*)user_type_name);
+	} else {
+		return make_typedef_ext_node(TYPE_ALIAS, new_alias, (char*)user_type_name);
+	}
+}
+
 // ASTの構造をツリー状に表示するデバッグ関数
 void print_ast(ASTNode* node, int depth) {
 	if (!node) return;
@@ -309,6 +420,11 @@ void print_ast(ASTNode* node, int depth) {
 		case AST_MUL:    printf("*\n"); break;
 		case AST_DIV:    printf("/\n"); break;
 		case AST_MOD:    printf("%%\n"); break;
+		case AST_BIT_AND: printf("&\n"); break;
+		case AST_BIT_OR:  printf("|\n"); break;
+		case AST_BIT_XOR: printf("^\n"); break;
+		case AST_LSHIFT:  printf("<<\n"); break;
+		case AST_RSHIFT:  printf(">>\n"); break;
 		case AST_LOGICAL_OR:  printf("||\n"); break;
 		case AST_LOGICAL_AND: printf("&&\n"); break;
 		case AST_LOGICAL_NOT: printf("!\n"); break;
@@ -349,10 +465,13 @@ void print_ast(ASTNode* node, int depth) {
 		case AST_METHOD_CALL:
 			printf("METHOD_CALL(%s.%s)\n", node->var_name, node->str_val);
 			break;
+		case AST_TYPEDEF:
+			printf("TYPEDEF(base:%d, alias:%s)\n", node->var_type, node->var_name);
+			break;
 	}
 	
 	// 子ノードの再帰表示
-	if (node->type == AST_SEQ || node->type == AST_ASSIGN || node->type == AST_ADD || node->type == AST_SUB || node->type == AST_MUL || node->type == AST_DIV || node->type == AST_MOD || node->type == AST_LOGICAL_OR || node->type == AST_LOGICAL_AND || node->type == AST_EQ || node->type == AST_NEQ || node->type == AST_LT || node->type == AST_LE || node->type == AST_GT || node->type == AST_GE || node->type == AST_MATCH) {
+	if (node->type == AST_SEQ || node->type == AST_ASSIGN || node->type == AST_ADD || node->type == AST_SUB || node->type == AST_MUL || node->type == AST_DIV || node->type == AST_MOD || node->type == AST_BIT_AND || node->type == AST_BIT_OR || node->type == AST_BIT_XOR || node->type == AST_LSHIFT || node->type == AST_RSHIFT || node->type == AST_LOGICAL_OR || node->type == AST_LOGICAL_AND || node->type == AST_EQ || node->type == AST_NEQ || node->type == AST_LT || node->type == AST_LE || node->type == AST_GT || node->type == AST_GE || node->type == AST_MATCH) {
 		print_ast(node->left, depth + 1);
 		print_ast(node->right, depth + 1);
 	} else if (node->type == AST_VARDECL) {

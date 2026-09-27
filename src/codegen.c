@@ -196,6 +196,9 @@ LLVMValueRef generate_node(ASTNode* node) {
             }
         }
 
+        case AST_TYPEDEF:
+            return NULL;
+
         case AST_CLASS_DEF: {
             ClassMeta meta;
             meta.class_name = strdup(node->var_name);
@@ -638,6 +641,36 @@ LLVMValueRef generate_node(ASTNode* node) {
             LLVMValueRef lhs = auto_unwrap(generate_node(node->left));
             LLVMValueRef rhs = auto_unwrap(generate_node(node->right));
             return LLVMBuildSRem(builder, lhs, rhs, "modtmp");
+        }
+
+        case AST_BIT_AND: {
+            LLVMValueRef lhs = auto_unwrap(generate_node(node->left));
+            LLVMValueRef rhs = auto_unwrap(generate_node(node->right));
+            return LLVMBuildAnd(builder, lhs, rhs, "andtmp");
+        }
+
+        case AST_BIT_OR: {
+            LLVMValueRef lhs = auto_unwrap(generate_node(node->left));
+            LLVMValueRef rhs = auto_unwrap(generate_node(node->right));
+            return LLVMBuildOr(builder, lhs, rhs, "ortmp");
+        }
+
+        case AST_BIT_XOR: {
+            LLVMValueRef lhs = auto_unwrap(generate_node(node->left));
+            LLVMValueRef rhs = auto_unwrap(generate_node(node->right));
+            return LLVMBuildXor(builder, lhs, rhs, "xortmp");
+        }
+
+        case AST_LSHIFT: {
+            LLVMValueRef lhs = auto_unwrap(generate_node(node->left));
+            LLVMValueRef rhs = auto_unwrap(generate_node(node->right));
+            return LLVMBuildShl(builder, lhs, rhs, "shltmp");
+        }
+
+        case AST_RSHIFT: {
+            LLVMValueRef lhs = auto_unwrap(generate_node(node->left));
+            LLVMValueRef rhs = auto_unwrap(generate_node(node->right));
+            return LLVMBuildAShr(builder, lhs, rhs, "ashrtmp");
         }
 
         case AST_SEQ: {

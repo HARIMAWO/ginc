@@ -33,6 +33,7 @@ int yylex() {
         re2c:yyfill:enable = 0;
 
         SHEBANG = "#!" [^\x00\n]*;
+        LINE_DIRECTIVE = [ \t]* "#" ("line")? [ \t]* [0-9]+ [ \t]* "\"" [^"\x00\n]* "\"" [^\x00\n]*;
         WS = [ \t\r\n]+;
         LINE_COMMENT = "//" [^\x00\n]*;
         BLOCK_COMMENT = "/*" ([^*] | ("*" [^/]))* "*"+ "/";
@@ -48,6 +49,27 @@ int yylex() {
         }
         "\x00" { return 0; }
         SHEBANG { update_location(tok, cursor); continue; }
+        LINE_DIRECTIVE {
+            int line_num = 1;
+            char filename_buf[512] = {0};
+            char const* p = tok;
+
+            while (*p == ' ' || *p == '\t') p++;
+            if (*p == '#') p++;
+            while (*p == ' ' || *p == '\t') p++;
+            if (strncmp(p, "line", 4) == 0) p += 4;
+            while (*p == ' ' || *p == '\t') p++;
+
+            if (sscanf(p, "%d \"%511[^\"]\"", &line_num, filename_buf) == 2) {
+                current_line = line_num;
+                current_filename = strdup(filename_buf);
+                current_column = 1;
+            } else if (sscanf(p, "%d", &line_num) == 1) {
+                current_line = line_num;
+                current_column = 1;
+            }
+            continue;
+        }
         WS { update_location(tok, cursor); continue; }
         LINE_COMMENT { update_location(tok, cursor); continue; }
         BLOCK_COMMENT { update_location(tok, cursor); continue; }
@@ -79,6 +101,7 @@ int yylex() {
         "true" { update_location(tok, cursor); return T_TRUE; }
         "false" { update_location(tok, cursor); return T_FALSE; }
         "null" { update_location(tok, cursor); return T_NULL; }
+        "typedef" { update_location(tok, cursor); return T_TYPEDEF; }
         "var" { update_location(tok, cursor); return T_VAR_TYPE; }
         "int" { update_location(tok, cursor); return T_INT_TYPE; }
         "double" { update_location(tok, cursor); return T_DOUBLE_TYPE; }
@@ -108,8 +131,10 @@ int yylex() {
         "print" { update_location(tok, cursor); return T_PRINT; }
         IDENT {
             update_location(tok, cursor);
-            // 変数名はASTに持たせるため、tokから差分(文字数)だけ複製
-            yylval.str = strndup(tok, cursor - tok); 
+            yylval.str = strndup(tok, cursor - tok);
+            if (is_typedef_name(yylval.str)) {
+                return T_USER_TYPE;
+            }
             return T_IDENT;
         }
         "&&" { update_location(tok, cursor); return T_AND; }
@@ -120,10 +145,14 @@ int yylex() {
         "=" { update_location(tok, cursor); return T_ASSIGN; }
         ">=" { update_location(tok, cursor); return T_GE; }
         "<=" { update_location(tok, cursor); return T_LE; }
+        ">>" { update_location(tok, cursor); return T_RSHIFT; }
+        "<<" { update_location(tok, cursor); return T_LSHIFT; }
         ">" { update_location(tok, cursor); return T_GT; }
         "<" { update_location(tok, cursor); return T_LT; }
         "%" { update_location(tok, cursor); return T_MOD; }
         "&" { update_location(tok, cursor); return T_AMP; }
+        "|" { update_location(tok, cursor); return T_BIT_OR_TOK; }
+        "^" { update_location(tok, cursor); return T_XOR; }
         "+" { update_location(tok, cursor); return T_PLUS; }
         "-" { update_location(tok, cursor); return T_MINUS; }
         "*" { update_location(tok, cursor); return T_STAR; }

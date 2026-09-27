@@ -20,16 +20,20 @@ static int current_access = 0;
 
 %token <num> T_NUM
 %token <float_val> T_FLOAT_LITERAL
-%token <str> T_IDENT T_STR T_STRING T_REGEX
-%token T_INT_TYPE T_STR_TYPE T_VAR_TYPE T_DOUBLE_TYPE T_ASSIGN T_PLUS T_MINUS T_STAR T_SLASH T_SEMI T_PRINT T_LPAREN T_RPAREN T_IF T_ELSE T_WHILE T_LBRACE T_RBRACE T_EQ T_LT T_MATCH T_LBRACKET T_RBRACKET T_COMMA T_RETURN T_TRY T_CATCH T_THROW T_FINALLY T_DOT T_CLASS T_STRUCT T_PUBLIC T_PRIVATE T_COLON T_TRUE T_FALSE T_NULL T_VOID T_CHAR T_FILE T_AND T_OR T_NOT T_NEQ T_GT T_LE T_GE T_MOD T_AMP T_FOR T_INC T_DEC T_DO T_BREAK T_CONTINUE
+%token <str> T_IDENT T_STR T_STRING T_REGEX T_USER_TYPE
+%token T_INT_TYPE T_STR_TYPE T_VAR_TYPE T_DOUBLE_TYPE T_ASSIGN T_PLUS T_MINUS T_STAR T_SLASH T_SEMI T_PRINT T_LPAREN T_RPAREN T_IF T_ELSE T_WHILE T_LBRACE T_RBRACE T_EQ T_LT T_MATCH T_LBRACKET T_RBRACKET T_COMMA T_RETURN T_TRY T_CATCH T_THROW T_FINALLY T_DOT T_CLASS T_STRUCT T_PUBLIC T_PRIVATE T_COLON T_TRUE T_FALSE T_NULL T_VOID T_CHAR T_FILE T_AND T_OR T_NOT T_NEQ T_GT T_LE T_GE T_MOD T_AMP T_FOR T_INC T_DEC T_DO T_BREAK T_CONTINUE T_TYPEDEF T_BIT_OR_TOK T_XOR T_LSHIFT T_RSHIFT
 
 %type <ast> stmt_list stmt expr expr_list param_list param_decl member_decl member_list class_def class_member class_item class_member_list finally_clause func_body catch_block catch_list opt_expr for_init
 
 %right T_ASSIGN
 %left T_OR
 %left T_AND
+%left T_BIT_OR_TOK
+%left T_XOR
+%left T_AMP
 %left T_EQ T_NEQ
 %left T_LT T_LE T_GT T_GE T_MATCH
+%left T_LSHIFT T_RSHIFT
 %left T_PLUS T_MINUS
 %left T_STAR T_SLASH T_MOD
 %right UMINUS T_NOT USTAR UAMP T_INC T_DEC
@@ -56,9 +60,24 @@ param_decl:
   | T_STR_TYPE T_IDENT { $$ = make_param_decl_node(TYPE_STR, $2); }
   | T_VAR_TYPE T_IDENT { $$ = make_param_decl_node(TYPE_VAR, $2); }
   | T_DOUBLE_TYPE T_IDENT { $$ = make_param_decl_node(TYPE_DOUBLE, $2); }
+  | T_USER_TYPE T_IDENT {
+        int found = 0;
+        GincType bt = resolve_type_alias($1, &found);
+        $$ = make_param_decl_node(found ? bt : TYPE_INT, $2);
+    }
   | T_CHAR T_STAR T_IDENT T_LBRACKET T_RBRACKET { $$ = make_param_decl_node(TYPE_VAR, $3); }
   | T_CHAR T_STAR T_IDENT { $$ = make_param_decl_node(TYPE_STR, $3); }
   | T_FILE T_STAR T_IDENT { $$ = make_param_decl_node(TYPE_FILE, $3); }
+  | T_IDENT T_IDENT {
+        int found = 0;
+        GincType bt = resolve_type_alias($1, &found);
+        if (found) {
+            $$ = make_param_decl_node(bt, $2);
+        } else {
+            yyerror("Unknown type name");
+            YYERROR;
+        }
+    }
 ;
 
 param_list:
@@ -73,6 +92,21 @@ member_decl:
     | T_STR_TYPE T_IDENT T_SEMI { $$ = make_param_decl_node(TYPE_STR, $2); }
     | T_VAR_TYPE T_IDENT T_SEMI { $$ = make_param_decl_node(TYPE_VAR, $2); }
     | T_DOUBLE_TYPE T_IDENT T_SEMI { $$ = make_param_decl_node(TYPE_DOUBLE, $2); }
+    | T_USER_TYPE T_IDENT T_SEMI {
+        int found = 0;
+        GincType bt = resolve_type_alias($1, &found);
+        $$ = make_param_decl_node(found ? bt : TYPE_INT, $2);
+    }
+    | T_IDENT T_IDENT T_SEMI {
+        int found = 0;
+        GincType bt = resolve_type_alias($1, &found);
+        if (found) {
+            $$ = make_param_decl_node(bt, $2);
+        } else {
+            yyerror("Unknown type name in class member");
+            YYERROR;
+        }
+    }
     ;
 
 member_list:
@@ -92,6 +126,11 @@ for_init:
     | T_STR_TYPE T_IDENT T_ASSIGN expr { $$ = make_vardecl_node(TYPE_STR, $2, $4); }
     | T_DOUBLE_TYPE T_IDENT T_ASSIGN expr { $$ = make_vardecl_node(TYPE_DOUBLE, $2, $4); }
     | T_VAR_TYPE T_IDENT T_ASSIGN expr { $$ = make_vardecl_node(TYPE_VAR, $2, $4); }
+    | T_USER_TYPE T_IDENT T_ASSIGN expr {
+        int found = 0;
+        GincType bt = resolve_type_alias($1, &found);
+        $$ = make_vardecl_node(found ? bt : TYPE_INT, $2, $4);
+    }
     ;
 
 class_member:
@@ -175,7 +214,70 @@ func_body:
     ;
 
 stmt:
-    T_INT_TYPE T_IDENT T_LPAREN param_list T_RPAREN func_body {
+    T_TYPEDEF T_INT_TYPE T_IDENT T_SEMI { $$ = make_typedef_node(TYPE_INT, $3); }
+    | T_TYPEDEF T_INT_TYPE T_USER_TYPE T_SEMI { $$ = make_typedef_node(TYPE_INT, $3); }
+    | T_TYPEDEF T_STR_TYPE T_IDENT T_SEMI { $$ = make_typedef_node(TYPE_STR, $3); }
+    | T_TYPEDEF T_STR_TYPE T_USER_TYPE T_SEMI { $$ = make_typedef_node(TYPE_STR, $3); }
+    | T_TYPEDEF T_DOUBLE_TYPE T_IDENT T_SEMI { $$ = make_typedef_node(TYPE_DOUBLE, $3); }
+    | T_TYPEDEF T_DOUBLE_TYPE T_USER_TYPE T_SEMI { $$ = make_typedef_node(TYPE_DOUBLE, $3); }
+    | T_TYPEDEF T_FILE T_STAR T_IDENT T_SEMI { $$ = make_typedef_node(TYPE_FILE, $4); }
+    | T_TYPEDEF T_FILE T_STAR T_USER_TYPE T_SEMI { $$ = make_typedef_node(TYPE_FILE, $4); }
+    | T_TYPEDEF T_USER_TYPE T_IDENT T_SEMI { $$ = make_typedef_node_from_user_type($2, $3); }
+    | T_TYPEDEF T_USER_TYPE T_USER_TYPE T_SEMI { $$ = make_typedef_node_from_user_type($2, $3); }
+    | T_TYPEDEF T_IDENT T_IDENT T_SEMI {
+        int found = 0;
+        GincType bt = resolve_type_alias($2, &found);
+        if (found) {
+            $$ = make_typedef_ext_node(bt, $3, $2);
+        } else {
+            // 構造体名または未解像型エイリアスとして登録
+            $$ = make_typedef_ext_node(TYPE_ALIAS, $3, $2);
+        }
+    }
+    | T_TYPEDEF T_IDENT T_USER_TYPE T_SEMI {
+        int found = 0;
+        GincType bt = resolve_type_alias($2, &found);
+        if (found) {
+            $$ = make_typedef_ext_node(bt, $3, $2);
+        } else {
+            $$ = make_typedef_ext_node(TYPE_ALIAS, $3, $2);
+        }
+    }
+    | T_USER_TYPE T_IDENT T_SEMI {
+        int found = 0;
+        GincType bt = resolve_type_alias($1, &found);
+        $$ = make_vardecl_node(found ? bt : TYPE_INT, $2, NULL);
+    }
+    | T_USER_TYPE T_IDENT T_ASSIGN expr T_SEMI {
+        int found = 0;
+        GincType bt = resolve_type_alias($1, &found);
+        $$ = make_vardecl_node(found ? bt : TYPE_INT, $2, $4);
+    }
+    | T_USER_TYPE T_IDENT T_LPAREN param_list T_RPAREN func_body {
+        int found = 0;
+        GincType bt = resolve_type_alias($1, &found);
+        $$ = make_func_decl_node(found ? bt : TYPE_INT, $2, $4, $6);
+    }
+    | T_IDENT T_IDENT T_SEMI {
+        int found = 0;
+        GincType bt = resolve_type_alias($1, &found);
+        if (found) {
+            $$ = make_vardecl_node(bt, $2, NULL);
+        } else {
+            $$ = make_class_var_decl_node($1, $2);
+        }
+    }
+    | T_IDENT T_IDENT T_ASSIGN expr T_SEMI {
+        int found = 0;
+        GincType bt = resolve_type_alias($1, &found);
+        if (found) {
+            $$ = make_vardecl_node(bt, $2, $4);
+        } else {
+            yyerror("Unknown type for assignment");
+            YYERROR;
+        }
+    }
+    | T_INT_TYPE T_IDENT T_LPAREN param_list T_RPAREN func_body {
         $$ = make_func_decl_node(TYPE_INT, $2, $4, $6);
     }
     | T_STR_TYPE T_IDENT T_LPAREN param_list T_RPAREN func_body {
@@ -325,6 +427,11 @@ expr:
     | expr T_STAR expr { $$ = make_binop_node(AST_MUL, $1, $3); }
     | expr T_SLASH expr { $$ = make_binop_node(AST_DIV, $1, $3); }
     | expr T_MOD expr { $$ = make_binop_node(AST_MOD, $1, $3); }
+    | expr T_AMP expr { $$ = make_binop_node(AST_BIT_AND, $1, $3); }
+    | expr T_BIT_OR_TOK expr { $$ = make_binop_node(AST_BIT_OR, $1, $3); }
+    | expr T_XOR expr { $$ = make_binop_node(AST_BIT_XOR, $1, $3); }
+    | expr T_LSHIFT expr { $$ = make_binop_node(AST_LSHIFT, $1, $3); }
+    | expr T_RSHIFT expr { $$ = make_binop_node(AST_RSHIFT, $1, $3); }
     ;
 
 %%

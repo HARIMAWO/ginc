@@ -7,8 +7,16 @@ typedef enum {
 	TYPE_VAR,
 	TYPE_DOUBLE,
 	TYPE_VOID,
-	TYPE_FILE
+	TYPE_FILE,
+	TYPE_ALIAS
 } GincType;
+
+typedef struct TypeAlias {
+	char* alias;
+	GincType base_type;
+	char* target_type_str;
+	struct TypeAlias* next;
+} TypeAlias;
 
 typedef enum {
 	AST_NUM,
@@ -28,6 +36,11 @@ typedef enum {
 	AST_MUL,
 	AST_DIV,
 	AST_MOD,
+	AST_BIT_AND,
+	AST_BIT_OR,
+	AST_BIT_XOR,
+	AST_LSHIFT,
+	AST_RSHIFT,
 	AST_LOGICAL_OR,
 	AST_LOGICAL_AND,
 	AST_LOGICAL_NOT,
@@ -63,7 +76,8 @@ typedef enum {
 	AST_CLASS_DEF,
 	AST_CLASS_VAR_DECL,
 	AST_CATCH_BLOCK,
-	AST_METHOD_CALL
+	AST_METHOD_CALL,
+	AST_TYPEDEF
 } ASTNodeType;
 
 // 前方宣言
@@ -124,6 +138,14 @@ extern ASTNode* make_index_assign_node(char* name, ASTNode* index, ASTNode* rhs)
 extern ASTNode* make_class_def_node(char* name, ASTNode* members);
 extern ASTNode* make_class_var_decl_node(char* class_name, char* var_name);
 extern ASTNode* make_method_call_node(char* obj_name, char* method_name, ASTNode* args);
+extern int is_reserved_keyword(char const* name);
+extern int is_typedef_name(char const* name);
+extern void register_type_alias(GincType base_type, char const* alias);
+extern void register_type_alias_ext(GincType base_type, char const* alias, char const* target_str);
+extern GincType resolve_type_alias(char const* name, int* is_found);
+extern ASTNode* make_typedef_node(GincType base_type, char* alias);
+extern ASTNode* make_typedef_ext_node(GincType base_type, char* alias, char* target_str);
+extern ASTNode* make_typedef_node_from_user_type(char const* user_type_name, char* new_alias);
 extern void print_ast(ASTNode* node, int depth);
 
 extern char const* current_filename;
