@@ -19,6 +19,20 @@ static char* local_names[MAX_LOCALS];
 static LLVMTypeRef local_types[MAX_LOCALS];
 static int local_count = 0;
 
+static LLVMValueRef auto_unwrap(LLVMValueRef val) {
+	if (!val) return NULL;
+	if (LLVMGetTypeKind(LLVMTypeOf(val)) == LLVMPointerTypeKind) {
+		LLVMTypeRef ptr_type = LLVMPointerType(LLVMInt8TypeInContext(context), 0);
+		LLVMTypeRef param_types[] = { ptr_type };
+		LLVMTypeRef unwrap_type = LLVMFunctionType(LLVMInt32TypeInContext(context), param_types, 1, 0);
+		LLVMValueRef unwrap_func = LLVMGetNamedFunction(module, "ginc_unwrap_int");
+		if (!unwrap_func) unwrap_func = LLVMAddFunction(module, "ginc_unwrap_int", unwrap_type);
+		LLVMValueRef args[] = { val };
+		return LLVMBuildCall2(builder, unwrap_type, unwrap_func, args, 1, "unwrapped");
+	}
+	return val;
+}
+
 LLVMValueRef generate_node(ASTNode* node) {
     if (!node) return NULL;
 
@@ -349,44 +363,46 @@ LLVMValueRef generate_node(ASTNode* node) {
         case AST_ADD: {
             LLVMValueRef lhs = generate_node(node->left);
             LLVMValueRef rhs = generate_node(node->right);
+            if (!lhs || !rhs) return NULL;
+            
+            int const lhs_is_ptr = (LLVMGetTypeKind(LLVMTypeOf(lhs)) == LLVMPointerTypeKind);
+            int const rhs_is_ptr = (LLVMGetTypeKind(LLVMTypeOf(rhs)) == LLVMPointerTypeKind);
 
-            if (LLVMGetTypeKind(LLVMTypeOf(lhs)) == LLVMPointerTypeKind) {
+            if (lhs_is_ptr && rhs_is_ptr) {
                 LLVMTypeRef ptr_type = LLVMPointerType(LLVMInt8TypeInContext(context), 0);
                 LLVMTypeRef param_types[] = { ptr_type, ptr_type };
                 LLVMTypeRef concat_type = LLVMFunctionType(ptr_type, param_types, 2, 0);
-
                 LLVMValueRef concat_func = LLVMGetNamedFunction(module, "ginc_str_concat");
-                if (!concat_func) {
-                    concat_func = LLVMAddFunction(module, "ginc_str_concat", concat_type);
-                }
-
+                if (!concat_func) concat_func = LLVMAddFunction(module, "ginc_str_concat", concat_type);
                 LLVMValueRef args[] = { lhs, rhs };
                 return LLVMBuildCall2(builder, concat_type, concat_func, args, 2, "concattmp");
             }
-
+            
+            lhs = auto_unwrap(lhs);
+            rhs = auto_unwrap(rhs);
             return LLVMBuildAdd(builder, lhs, rhs, "addtmp");
         }
 
         case AST_SUB: {
-            LLVMValueRef lhs = generate_node(node->left);
-            LLVMValueRef rhs = generate_node(node->right);
+            LLVMValueRef lhs = auto_unwrap(generate_node(node->left));
+            LLVMValueRef rhs = auto_unwrap(generate_node(node->right));
             return LLVMBuildSub(builder, lhs, rhs, "subtmp");
         }
 
         case AST_UNARY_MINUS: {
-            LLVMValueRef val = generate_node(node->left);
+            LLVMValueRef val = auto_unwrap(generate_node(node->left));
             return LLVMBuildNeg(builder, val, "negtmp");
         }
 
         case AST_MUL: {
-            LLVMValueRef lhs = generate_node(node->left);
-            LLVMValueRef rhs = generate_node(node->right);
+            LLVMValueRef lhs = auto_unwrap(generate_node(node->left));
+            LLVMValueRef rhs = auto_unwrap(generate_node(node->right));
             return LLVMBuildMul(builder, lhs, rhs, "multmp");
         }
 
         case AST_DIV: {
-            LLVMValueRef lhs = generate_node(node->left);
-            LLVMValueRef rhs = generate_node(node->right);
+            LLVMValueRef lhs = auto_unwrap(generate_node(node->left));
+            LLVMValueRef rhs = auto_unwrap(generate_node(node->right));
             return LLVMBuildSDiv(builder, lhs, rhs, "divtmp");
         }
 
@@ -461,8 +477,8 @@ LLVMValueRef generate_node(ASTNode* node) {
 
         case AST_EQ:
         case AST_LT: {
-            LLVMValueRef lhs = generate_node(node->left);
-            LLVMValueRef rhs = generate_node(node->right);
+            LLVMValueRef lhs = auto_unwrap(generate_node(node->left));
+            LLVMValueRef rhs = auto_unwrap(generate_node(node->right));
             LLVMIntPredicate pred = (node->type == AST_EQ) ? LLVMIntEQ : LLVMIntSLT;
             LLVMValueRef cmp = LLVMBuildICmp(builder, pred, lhs, rhs, "cmptmp");
             // ★超重要: 比較結果(i1)を必ず変数と同じ i32 にキャストして返す
@@ -840,24 +856,34 @@ LLVMValueRef generate_node(ASTNode* node) {
             LLVMValueRef unwrap_args[] = { boxed_func };
             LLVMValueRef raw_func = LLVMBuildCall2(builder, unwrap_func_type, unwrap_func, unwrap_args, 1, "raw_method");
 
-            LLVMValueRef args[16];
-            LLVMTypeRef arg_types[16];
             int arg_count = 0;
             ASTNode* curr_arg = node->left;
-            while (curr_arg && arg_count < 16) {
-                LLVMValueRef arg_val = generate_node(curr_arg->left);
-                args[arg_count] = arg_val;
-                arg_types[arg_count] = LLVMTypeOf(arg_val);
-                arg_count++;
-                curr_arg = curr_arg->right;
+            while (curr_arg) { arg_count++; curr_arg = curr_arg->right; }
+
+            LLVMTypeRef* arg_types = malloc(sizeof(LLVMTypeRef) * (arg_count + 1));
+            LLVMValueRef* args = malloc(sizeof(LLVMValueRef) * (arg_count + 1));
+
+            args[0] = ht_ptr;
+            arg_types[0] = ptr_type;
+
+            curr_arg = node->left;
+            int i = 1;
+            while (curr_arg) {
+                args[i] = generate_node(curr_arg->left);
+                arg_types[i] = LLVMTypeOf(args[i]);
+                curr_arg = curr_arg->right; i++;
             }
 
-            LLVMTypeRef method_type = LLVMFunctionType(LLVMInt32TypeInContext(context), arg_types, arg_count, 0);
-            return LLVMBuildCall2(builder, method_type, raw_func, args, arg_count, "method_res");
+            LLVMTypeRef method_type = LLVMFunctionType(LLVMInt32TypeInContext(context), arg_types, arg_count + 1, 0);
+            LLVMValueRef call_res = LLVMBuildCall2(builder, method_type, raw_func, args, arg_count + 1, "method_res");
+            free(arg_types);
+            free(args);
+            return call_res;
         }
 
         case AST_RETURN: {
             LLVMValueRef ret_val = generate_node(node->left);
+            ret_val = auto_unwrap(ret_val);
             return LLVMBuildRet(builder, ret_val);
         }
 
@@ -897,12 +923,19 @@ LLVMValueRef generate_node(ASTNode* node) {
             LLVMTypeRef* param_types = NULL;
             if (param_count > 0) {
                 param_types = malloc(sizeof(LLVMTypeRef) * param_count);
-                for (int i = 0; i < param_count; i++) param_types[i] = LLVMInt32TypeInContext(context);
+                ASTNode* cp = node->left;
+                for (int i = 0; i < param_count; i++) {
+                    if (cp->left->var_type == TYPE_INT) {
+                        param_types[i] = LLVMInt32TypeInContext(context);
+                    } else {
+                        param_types[i] = LLVMPointerType(LLVMInt8TypeInContext(context), 0);
+                    }
+                    cp = cp->right;
+                }
             }
             
             LLVMTypeRef func_type = LLVMFunctionType(LLVMInt32TypeInContext(context), param_types, param_count, 0);
             LLVMValueRef func = LLVMAddFunction(module, node->var_name, func_type);
-            if (param_types) free(param_types);
             
             LLVMBasicBlockRef old_bb = LLVMGetInsertBlock(builder);
             LLVMBasicBlockRef entry = LLVMAppendBasicBlockInContext(context, func, "entry");
@@ -915,10 +948,10 @@ LLVMValueRef generate_node(ASTNode* node) {
             int p_idx = 0;
             while (curr_param) {
                 char* p_name = curr_param->left->var_name;
-                LLVMValueRef alloca_inst = LLVMBuildAlloca(builder, LLVMInt32TypeInContext(context), p_name);
+                LLVMValueRef alloca_inst = LLVMBuildAlloca(builder, param_types[p_idx], p_name);
                 local_names[local_count] = strdup(p_name);
                 local_vars[local_count] = alloca_inst;
-                local_types[local_count] = LLVMInt32TypeInContext(context);
+                local_types[local_count] = param_types[p_idx];
                 local_count++;
                 
                 LLVMValueRef arg_val = LLVMGetParam(func, p_idx);
@@ -926,6 +959,8 @@ LLVMValueRef generate_node(ASTNode* node) {
                 
                 curr_param = curr_param->right; p_idx++;
             }
+
+            if (param_types) free(param_types);
             
             generate_node(node->body); // 関数本体の評価
             

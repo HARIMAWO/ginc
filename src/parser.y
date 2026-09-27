@@ -18,7 +18,7 @@ ASTNode* root_node;
 %token <str> T_IDENT T_STR T_STRING T_REGEX
 %token T_INT_TYPE T_STR_TYPE T_VAR_TYPE T_ASSIGN T_PLUS T_MINUS T_STAR T_SLASH T_SEMI T_PRINT T_LPAREN T_RPAREN T_IF T_ELSE T_WHILE T_LBRACE T_RBRACE T_EQ T_LT T_MATCH T_LBRACKET T_RBRACKET T_COMMA T_RETURN T_TRY T_CATCH T_THROW T_FINALLY T_DOT T_CLASS
 
-%type <ast> stmt_list stmt expr expr_list param_list member_decl member_list finally_clause func_body catch_block catch_list
+%type <ast> stmt_list stmt expr expr_list param_list param_decl member_decl member_list finally_clause func_body catch_block catch_list
 
 %left T_MATCH
 %left T_EQ T_LT
@@ -42,12 +42,16 @@ expr_list:
     | expr T_COMMA expr_list { $$ = make_expr_list_node($1, $3); }
     ;
 
+param_decl:
+    T_INT_TYPE T_IDENT { $$ = make_param_decl_node(TYPE_INT, $2); }
+  | T_STR_TYPE T_IDENT { $$ = make_param_decl_node(TYPE_STR, $2); }
+  | T_VAR_TYPE T_IDENT { $$ = make_param_decl_node(TYPE_VAR, $2); }
+;
+
 param_list:
     /* empty */ { $$ = NULL; }
-    | T_INT_TYPE T_IDENT { $$ = make_expr_list_node(make_param_decl_node(TYPE_INT, $2), NULL); }
-    | T_STR_TYPE T_IDENT { $$ = make_expr_list_node(make_param_decl_node(TYPE_STR, $2), NULL); }
-    | T_INT_TYPE T_IDENT T_COMMA param_list { $$ = make_expr_list_node(make_param_decl_node(TYPE_INT, $2), $4); }
-    | T_STR_TYPE T_IDENT T_COMMA param_list { $$ = make_expr_list_node(make_param_decl_node(TYPE_STR, $2), $4); }
+    | param_decl { $$ = make_expr_list_node($1, NULL); }
+    | param_decl T_COMMA param_list { $$ = make_expr_list_node($1, $3); }
     ;
 
 member_decl:
