@@ -75,6 +75,7 @@ int yylex() {
         "if" { update_location(tok, cursor); return T_IF; }
         "else" { update_location(tok, cursor); return T_ELSE; }
         "while" { update_location(tok, cursor); return T_WHILE; }
+        "return" { update_location(tok, cursor); return T_RETURN; }
         "print" { update_location(tok, cursor); return T_PRINT; }
         IDENT {
             update_location(tok, cursor);

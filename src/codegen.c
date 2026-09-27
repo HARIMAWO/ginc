@@ -7,10 +7,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
 
 static LLVMContextRef context;
 static LLVMModuleRef module;
 static LLVMBuilderRef builder;
+
+#define MAX_LOCALS 100
+static LLVMValueRef local_vars[MAX_LOCALS];
+static char* local_names[MAX_LOCALS];
+static int local_count = 0;
 
 LLVMValueRef generate_node(ASTNode* node) {
     if (!node) return NULL;
@@ -29,30 +35,37 @@ LLVMValueRef generate_node(ASTNode* node) {
             return LLVMBuildGlobalStringPtr(builder, node->str_val, "regextmp");
 
         case AST_VAR: {
+            // 1. ローカル変数を後ろから探す
+            for (int i = local_count - 1; i >= 1; i--) {
+                if (local_names[i] && strcmp(local_names[i], node->var_name) == 0) {
+                    return LLVMBuildLoad2(builder, LLVMInt32TypeInContext(context), local_vars[i], node->var_name);
+                }
+            }
+            // 2. なければグローバル変数
             LLVMValueRef var = LLVMGetNamedGlobal(module, node->var_name);
             if (!var) {
                 fprintf(stderr, "Ga! (Codegen Error): Unknown variable '%s'\n", node->var_name);
                 return NULL;
             }
-            return LLVMBuildLoad2(builder, LLVMGlobalGetValueType(var), var, node->var_name);
+            return LLVMBuildLoad2(builder, LLVMInt32TypeInContext(context), var, node->var_name);
         }
 
         case AST_VARDECL: {
             LLVMValueRef init_val = generate_node(node->right);
             if (!init_val) return NULL;
-
-            char const* const var_name = node->var_name;
-            if (LLVMGetNamedGlobal(module, var_name)) {
-                fprintf(stderr, "Ga! (Codegen Error): Variable '%s' is already declared\n", var_name);
-                return NULL;
+            if (local_count > 0) { // 関数内のローカル変数
+                LLVMValueRef alloca_inst = LLVMBuildAlloca(builder, LLVMInt32TypeInContext(context), node->var_name);
+                local_names[local_count] = strdup(node->var_name);
+                local_vars[local_count] = alloca_inst;
+                local_count++;
+                LLVMBuildStore(builder, init_val, alloca_inst);
+                return init_val;
+            } else { // グローバル変数
+                LLVMValueRef var = LLVMAddGlobal(module, LLVMTypeOf(init_val), node->var_name);
+                LLVMSetInitializer(var, LLVMConstNull(LLVMTypeOf(init_val)));
+                LLVMBuildStore(builder, init_val, var);
+                return init_val;
             }
-
-            LLVMTypeRef const val_type = LLVMTypeOf(init_val);
-            LLVMValueRef const var = LLVMAddGlobal(module, val_type, var_name);
-            LLVMSetInitializer(var, LLVMConstNull(val_type));
-
-            LLVMBuildStore(builder, init_val, var);
-            return init_val;
         }
 
         case AST_ARRAY_DECL: {
@@ -109,20 +122,18 @@ LLVMValueRef generate_node(ASTNode* node) {
         case AST_ASSIGN: {
             LLVMValueRef rhs = generate_node(node->right);
             if (!rhs) return NULL;
-
-            if (node->left->type != AST_VAR) {
-                fprintf(stderr, "Ga! (Codegen Error): LHS of assignment must be a variable\n");
-                return NULL;
-            }
-
             char const* const var_name = node->left->var_name;
-            LLVMValueRef const var = LLVMGetNamedGlobal(module, var_name);
-            
+            LLVMValueRef var = NULL;
+            for (int i = local_count - 1; i >= 1; i--) {
+                if (local_names[i] && strcmp(local_names[i], var_name) == 0) {
+                    var = local_vars[i]; break;
+                }
+            }
+            if (!var) var = LLVMGetNamedGlobal(module, var_name);
             if (!var) {
                 fprintf(stderr, "Ga! (Codegen Error): Undeclared variable '%s'\n", var_name);
                 return NULL;
             }
-
             LLVMBuildStore(builder, rhs, var);
             return rhs;
         }
@@ -219,7 +230,6 @@ LLVMValueRef generate_node(ASTNode* node) {
         case AST_IF: {
             LLVMValueRef cond_val = generate_node(node->cond);
             LLVMValueRef zero = LLVMConstInt(LLVMInt32TypeInContext(context), 0, 0);
-            // ★超重要: i32同士を比較して、LLVMBuildCondBr用の純粋な i1 を生成する
             LLVMValueRef cond_i1 = LLVMBuildICmp(builder, LLVMIntNE, cond_val, zero, "ifcond");
 
             LLVMValueRef func = LLVMGetBasicBlockParent(LLVMGetInsertBlock(builder));
@@ -234,19 +244,21 @@ LLVMValueRef generate_node(ASTNode* node) {
                 LLVMBuildCondBr(builder, cond_i1, then_bb, merge_bb);
             }
 
-            // then ブロックの生成
             LLVMPositionBuilderAtEnd(builder, then_bb);
             generate_node(node->then_body);
-            LLVMBuildBr(builder, merge_bb);
-
-            // else ブロックの生成
-            if (node->else_body) {
-                LLVMPositionBuilderAtEnd(builder, else_bb);
-                generate_node(node->else_body);
+            // ★重要: ブロックが既にreturn等で終わっている場合はBranchを追加しない
+            if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(builder))) {
                 LLVMBuildBr(builder, merge_bb);
             }
 
-            // 合流ブロックへ移動
+            if (node->else_body) {
+                LLVMPositionBuilderAtEnd(builder, else_bb);
+                generate_node(node->else_body);
+                if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(builder))) {
+                    LLVMBuildBr(builder, merge_bb);
+                }
+            }
+
             LLVMPositionBuilderAtEnd(builder, merge_bb);
             return NULL;
         }
@@ -278,6 +290,91 @@ LLVMValueRef generate_node(ASTNode* node) {
 
         case AST_EXPR_LIST:
             return NULL;
+
+        case AST_PARAM_DECL:
+            return NULL;
+
+        case AST_RETURN: {
+            LLVMValueRef ret_val = generate_node(node->left);
+            return LLVMBuildRet(builder, ret_val);
+        }
+
+        case AST_FUNC_CALL: {
+            LLVMValueRef func = LLVMGetNamedFunction(module, node->var_name);
+            if (!func) {
+                fprintf(stderr, "Ga! (Codegen Error): Unknown function '%s'\n", node->var_name);
+                return NULL;
+            }
+            // ★超重要: Opaque Pointer環境ではLLVMGlobalGetValueTypeで関数の実際の型を取得する
+            LLVMTypeRef func_type = LLVMGlobalGetValueType(func);
+            
+            int arg_count = 0;
+            ASTNode* curr_arg = node->left;
+            while (curr_arg) { arg_count++; curr_arg = curr_arg->right; }
+            
+            LLVMValueRef* args = NULL;
+            if (arg_count > 0) {
+                args = malloc(sizeof(LLVMValueRef) * arg_count);
+                curr_arg = node->left;
+                int i = 0;
+                while (curr_arg) {
+                    args[i] = generate_node(curr_arg->left);
+                    curr_arg = curr_arg->right; i++;
+                }
+            }
+            LLVMValueRef call_res = LLVMBuildCall2(builder, func_type, func, args, arg_count, "calltmp");
+            if (args) free(args);
+            return call_res;
+        }
+
+        case AST_FUNC_DECL: {
+            int param_count = 0;
+            ASTNode* curr_param = node->left; // params (AST_EXPR_LIST)
+            while (curr_param) { param_count++; curr_param = curr_param->right; }
+            
+            LLVMTypeRef* param_types = NULL;
+            if (param_count > 0) {
+                param_types = malloc(sizeof(LLVMTypeRef) * param_count);
+                for (int i = 0; i < param_count; i++) param_types[i] = LLVMInt32TypeInContext(context);
+            }
+            
+            LLVMTypeRef func_type = LLVMFunctionType(LLVMInt32TypeInContext(context), param_types, param_count, 0);
+            LLVMValueRef func = LLVMAddFunction(module, node->var_name, func_type);
+            if (param_types) free(param_types);
+            
+            LLVMBasicBlockRef old_bb = LLVMGetInsertBlock(builder);
+            LLVMBasicBlockRef entry = LLVMAppendBasicBlockInContext(context, func, "entry");
+            LLVMPositionBuilderAtEnd(builder, entry);
+            
+            int old_local_count = local_count;
+            local_count = 1; // ローカル変数は1から開始
+            
+            curr_param = node->left;
+            int p_idx = 0;
+            while (curr_param) {
+                char* p_name = curr_param->left->var_name;
+                LLVMValueRef alloca_inst = LLVMBuildAlloca(builder, LLVMInt32TypeInContext(context), p_name);
+                local_names[local_count] = strdup(p_name);
+                local_vars[local_count] = alloca_inst;
+                local_count++;
+                
+                LLVMValueRef arg_val = LLVMGetParam(func, p_idx);
+                LLVMBuildStore(builder, arg_val, alloca_inst);
+                
+                curr_param = curr_param->right; p_idx++;
+            }
+            
+            generate_node(node->body); // 関数本体の評価
+            
+            // ターミネータ(return等)が無ければダミーのreturnを追加して検証エラーを防ぐ
+            if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(builder))) {
+                LLVMBuildRet(builder, LLVMConstInt(LLVMInt32TypeInContext(context), 0, 0));
+            }
+            
+            local_count = old_local_count;
+            LLVMPositionBuilderAtEnd(builder, old_bb);
+            return NULL;
+        }
     }
     return NULL;
 }

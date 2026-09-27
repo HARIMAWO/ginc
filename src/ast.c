@@ -112,6 +112,39 @@ ASTNode* make_expr_list_node(ASTNode* expr, ASTNode* next) {
 	return node;
 }
 
+ASTNode* make_func_decl_node(GincType ret_type, char* name, ASTNode* params, ASTNode* body) {
+	ASTNode* node = malloc(sizeof(ASTNode));
+	node->type = AST_FUNC_DECL;
+	node->var_type = ret_type;
+	node->var_name = name;
+	node->left = params;
+	node->body = body;
+	return node;
+}
+
+ASTNode* make_func_call_node(char* name, ASTNode* args) {
+	ASTNode* node = malloc(sizeof(ASTNode));
+	node->type = AST_FUNC_CALL;
+	node->var_name = name;
+	node->left = args;
+	return node;
+}
+
+ASTNode* make_return_node(ASTNode* expr) {
+	ASTNode* node = malloc(sizeof(ASTNode));
+	node->type = AST_RETURN;
+	node->left = expr;
+	return node;
+}
+
+ASTNode* make_param_decl_node(GincType type, char* name) {
+	ASTNode* node = malloc(sizeof(ASTNode));
+	node->type = AST_PARAM_DECL;
+	node->var_type = type;
+	node->var_name = name;
+	return node;
+}
+
 // ASTの構造をツリー状に表示するデバッグ関数
 void print_ast(ASTNode* node, int depth) {
 	if (!node) return;
@@ -144,6 +177,10 @@ void print_ast(ASTNode* node, int depth) {
 		case AST_ARRAY_DECL: printf("ARRAY_DECL(%s[%d])\n", node->var_name, node->val); break;
 		case AST_ARRAY_ACCESS: printf("ARRAY_ACCESS(%s)\n", node->var_name); break;
 		case AST_EXPR_LIST: printf("EXPR_LIST\n"); break;
+		case AST_FUNC_DECL: printf("FUNC_DECL(%s)\n", node->var_name); break;
+		case AST_FUNC_CALL: printf("FUNC_CALL(%s)\n", node->var_name); break;
+		case AST_RETURN: printf("RETURN\n"); break;
+		case AST_PARAM_DECL: printf("PARAM_DECL(%s)\n", node->var_name); break;
 	}
 	
 	// 子ノードの再帰表示
@@ -170,5 +207,10 @@ void print_ast(ASTNode* node, int depth) {
 		if (node->right) {
 			print_ast(node->right, depth + 1);
 		}
+	} else if (node->type == AST_FUNC_DECL) {
+		if (node->left) print_ast(node->left, depth + 1);
+		if (node->body) print_ast(node->body, depth + 1);
+	} else if (node->type == AST_FUNC_CALL || node->type == AST_RETURN) {
+		if (node->left) print_ast(node->left, depth + 1);
 	}
 }

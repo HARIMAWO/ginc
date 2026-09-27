@@ -26,7 +26,11 @@ typedef enum {
 	AST_MATCH,
 	AST_ARRAY_DECL,
 	AST_ARRAY_ACCESS,
-	AST_EXPR_LIST
+	AST_EXPR_LIST,
+	AST_FUNC_DECL,
+	AST_FUNC_CALL,
+	AST_RETURN,
+	AST_PARAM_DECL
 } ASTNodeType;
 
 // 前方宣言
@@ -43,23 +47,28 @@ struct ASTNode {
 	ASTNode* cond;     // 条件式
 	ASTNode* then_body;// then節
 	ASTNode* else_body;// else節
+	ASTNode* body;     // 関数本体用
 };
 
-ASTNode* make_num_node(int val);
-ASTNode* make_str_node(char* str_val);
-ASTNode* make_string_node(char* str);
-ASTNode* make_regex_node(char* pattern);
-ASTNode* make_var_node(char* name);
-ASTNode* make_vardecl_node(GincType type, char* var_name, ASTNode* init_expr);
-ASTNode* make_binop_node(ASTNodeType type, ASTNode* left, ASTNode* right);
-ASTNode* make_print_node(ASTNode* arg);
-ASTNode* make_if_node(ASTNode* cond, ASTNode* then_body, ASTNode* else_body);
-ASTNode* make_while_node(ASTNode* cond, ASTNode* body);
-ASTNode* make_block_node(ASTNode* stmt_list);
-ASTNode* make_array_decl_node(GincType type, char* name, int max_size, ASTNode* init_list);
-ASTNode* make_array_access_node(char* name, ASTNode* index);
-ASTNode* make_expr_list_node(ASTNode* expr, ASTNode* next);
-void print_ast(ASTNode* node, int depth); // ★追加
+extern ASTNode* make_num_node(int val);
+extern ASTNode* make_str_node(char* str_val);
+extern ASTNode* make_string_node(char* str);
+extern ASTNode* make_regex_node(char* pattern);
+extern ASTNode* make_var_node(char* name);
+extern ASTNode* make_vardecl_node(GincType type, char* var_name, ASTNode* init_expr);
+extern ASTNode* make_binop_node(ASTNodeType type, ASTNode* left, ASTNode* right);
+extern ASTNode* make_print_node(ASTNode* arg);
+extern ASTNode* make_if_node(ASTNode* cond, ASTNode* then_body, ASTNode* else_body);
+extern ASTNode* make_while_node(ASTNode* cond, ASTNode* body);
+extern ASTNode* make_block_node(ASTNode* stmt_list);
+extern ASTNode* make_array_decl_node(GincType type, char* name, int max_size, ASTNode* init_list);
+extern ASTNode* make_array_access_node(char* name, ASTNode* index);
+extern ASTNode* make_expr_list_node(ASTNode* expr, ASTNode* next);
+extern ASTNode* make_func_decl_node(GincType ret_type, char* name, ASTNode* params, ASTNode* body);
+extern ASTNode* make_func_call_node(char* name, ASTNode* args);
+extern ASTNode* make_return_node(ASTNode* expr);
+extern ASTNode* make_param_decl_node(GincType type, char* name);
+extern void print_ast(ASTNode* node, int depth);
 
 extern char const* current_filename;
 extern int current_line;
