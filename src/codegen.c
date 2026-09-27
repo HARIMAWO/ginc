@@ -133,7 +133,7 @@ LLVMValueRef generate_node(ASTNode* node) {
             char const* const var_name = node->var_name;
 
             if (LLVMGetTypeKind(LLVMTypeOf(idx_val)) == LLVMPointerTypeKind) {
-                // ハッシュアクセス
+                // ハッシュアクセス (GincValue* を返す)
                 LLVMValueRef ht_var = NULL;
                 for (int i = local_count - 1; i >= 1; i--) {
                     if (local_names[i] && strcmp(local_names[i], var_name) == 0) {
@@ -150,7 +150,7 @@ LLVMValueRef generate_node(ASTNode* node) {
                 LLVMValueRef ht_ptr = LLVMBuildLoad2(builder, ptr_type, ht_var, var_name);
 
                 LLVMTypeRef param_types[] = { ptr_type, ptr_type };
-                LLVMTypeRef func_type = LLVMFunctionType(LLVMInt32TypeInContext(context), param_types, 2, 0);
+                LLVMTypeRef func_type = LLVMFunctionType(ptr_type, param_types, 2, 0);
                 LLVMValueRef get_func = LLVMGetNamedFunction(module, "ginc_hash_get");
                 if (!get_func) {
                     get_func = LLVMAddFunction(module, "ginc_hash_get", func_type);
@@ -208,7 +208,7 @@ LLVMValueRef generate_node(ASTNode* node) {
             char const* const var_name = node->var_name;
 
             if (LLVMGetTypeKind(LLVMTypeOf(idx_val)) == LLVMPointerTypeKind) {
-                // ハッシュキー代入
+                // ハッシュキー代入 (GincValue* へボクシングして格納)
                 LLVMValueRef ht_var = NULL;
                 for (int i = local_count - 1; i >= 1; i--) {
                     if (local_names[i] && strcmp(local_names[i], var_name) == 0) {
@@ -224,15 +224,36 @@ LLVMValueRef generate_node(ASTNode* node) {
                 LLVMTypeRef ptr_type = LLVMPointerType(LLVMInt8TypeInContext(context), 0);
                 LLVMValueRef ht_ptr = LLVMBuildLoad2(builder, ptr_type, ht_var, var_name);
 
-                LLVMTypeRef param_types[] = { ptr_type, ptr_type, LLVMInt32TypeInContext(context) };
-                LLVMTypeRef func_type = LLVMFunctionType(LLVMVoidTypeInContext(context), param_types, 3, 0);
-                LLVMValueRef set_func = LLVMGetNamedFunction(module, "ginc_hash_set");
-                if (!set_func) {
-                    set_func = LLVMAddFunction(module, "ginc_hash_set", func_type);
+                LLVMValueRef boxed_val = NULL;
+                if (LLVMGetTypeKind(LLVMTypeOf(rhs_val)) == LLVMIntegerTypeKind) {
+                    LLVMTypeRef param_types[] = { LLVMInt32TypeInContext(context) };
+                    LLVMTypeRef mk_func_type = LLVMFunctionType(ptr_type, param_types, 1, 0);
+                    LLVMValueRef mk_func = LLVMGetNamedFunction(module, "ginc_make_int");
+                    if (!mk_func) {
+                        mk_func = LLVMAddFunction(module, "ginc_make_int", mk_func_type);
+                    }
+                    LLVMValueRef args[] = { rhs_val };
+                    boxed_val = LLVMBuildCall2(builder, mk_func_type, mk_func, args, 1, "boxed_int");
+                } else {
+                    LLVMTypeRef param_types[] = { ptr_type };
+                    LLVMTypeRef mk_func_type = LLVMFunctionType(ptr_type, param_types, 1, 0);
+                    LLVMValueRef mk_func = LLVMGetNamedFunction(module, "ginc_make_str");
+                    if (!mk_func) {
+                        mk_func = LLVMAddFunction(module, "ginc_make_str", mk_func_type);
+                    }
+                    LLVMValueRef args[] = { rhs_val };
+                    boxed_val = LLVMBuildCall2(builder, mk_func_type, mk_func, args, 1, "boxed_str");
                 }
 
-                LLVMValueRef args[] = { ht_ptr, idx_val, rhs_val };
-                LLVMBuildCall2(builder, func_type, set_func, args, 3, "");
+                LLVMTypeRef set_param_types[] = { ptr_type, ptr_type, ptr_type };
+                LLVMTypeRef set_func_type = LLVMFunctionType(LLVMVoidTypeInContext(context), set_param_types, 3, 0);
+                LLVMValueRef set_func = LLVMGetNamedFunction(module, "ginc_hash_set");
+                if (!set_func) {
+                    set_func = LLVMAddFunction(module, "ginc_hash_set", set_func_type);
+                }
+
+                LLVMValueRef args[] = { ht_ptr, idx_val, boxed_val };
+                LLVMBuildCall2(builder, set_func_type, set_func, args, 3, "");
                 return rhs_val;
             }
 
@@ -326,20 +347,37 @@ LLVMValueRef generate_node(ASTNode* node) {
             LLVMValueRef arg_val = generate_node(node->left);
             if (!arg_val) return NULL;
 
+            if (LLVMGetTypeKind(LLVMTypeOf(arg_val)) == LLVMPointerTypeKind) {
+                if (node->left->type == AST_ARRAY_ACCESS) {
+                    LLVMTypeRef ptr_type = LLVMPointerType(LLVMInt8TypeInContext(context), 0);
+                    LLVMTypeRef param_types[] = { ptr_type };
+                    LLVMTypeRef print_val_type = LLVMFunctionType(LLVMVoidTypeInContext(context), param_types, 1, 0);
+                    LLVMValueRef print_val_func = LLVMGetNamedFunction(module, "ginc_print_val");
+                    if (!print_val_func) {
+                        print_val_func = LLVMAddFunction(module, "ginc_print_val", print_val_type);
+                    }
+                    LLVMValueRef args[] = { arg_val };
+                    return LLVMBuildCall2(builder, print_val_type, print_val_func, args, 1, "");
+                }
+
+                LLVMTypeRef param_types[] = { LLVMPointerType(LLVMInt8TypeInContext(context), 0) };
+                LLVMTypeRef printf_type = LLVMFunctionType(LLVMInt32TypeInContext(context), param_types, 1, 1);
+                LLVMValueRef printf_func = LLVMGetNamedFunction(module, "printf");
+                if (!printf_func) {
+                    printf_func = LLVMAddFunction(module, "printf", printf_type);
+                }
+                LLVMValueRef format_str = LLVMBuildGlobalStringPtr(builder, "%s\n", "fmt");
+                LLVMValueRef args[] = { format_str, arg_val };
+                return LLVMBuildCall2(builder, printf_type, printf_func, args, 2, "printf_call");
+            }
+
             LLVMTypeRef param_types[] = { LLVMPointerType(LLVMInt8TypeInContext(context), 0) };
             LLVMTypeRef printf_type = LLVMFunctionType(LLVMInt32TypeInContext(context), param_types, 1, 1);
-            
             LLVMValueRef printf_func = LLVMGetNamedFunction(module, "printf");
             if (!printf_func) {
                 printf_func = LLVMAddFunction(module, "printf", printf_type);
             }
-
-            char const* fmt = "%d\n";
-            if (LLVMGetTypeKind(LLVMTypeOf(arg_val)) == LLVMPointerTypeKind) {
-                fmt = "%s\n";
-            }
-
-            LLVMValueRef format_str = LLVMBuildGlobalStringPtr(builder, fmt, "fmt");
+            LLVMValueRef format_str = LLVMBuildGlobalStringPtr(builder, "%d\n", "fmt");
             LLVMValueRef args[] = { format_str, arg_val };
             return LLVMBuildCall2(builder, printf_type, printf_func, args, 2, "printf_call");
         }
@@ -759,10 +797,19 @@ void generate_code(ASTNode* root) {
     void* ginc_hash_create(void);
     LLVMAddSymbol("ginc_hash_create", (void*)ginc_hash_create);
 
-    void ginc_hash_set(void* ht, char const* key, int val);
+    void* ginc_make_int(int v);
+    LLVMAddSymbol("ginc_make_int", (void*)ginc_make_int);
+
+    void* ginc_make_str(char const* v);
+    LLVMAddSymbol("ginc_make_str", (void*)ginc_make_str);
+
+    void ginc_print_val(void* val);
+    LLVMAddSymbol("ginc_print_val", (void*)ginc_print_val);
+
+    void ginc_hash_set(void* ht, char const* key, void* val);
     LLVMAddSymbol("ginc_hash_set", (void*)ginc_hash_set);
 
-    int ginc_hash_get(void* ht, char const* key);
+    void* ginc_hash_get(void* ht, char const* key);
     LLVMAddSymbol("ginc_hash_get", (void*)ginc_hash_get);
 
     LLVMExecutionEngineRef engine;
