@@ -16,6 +16,9 @@ typedef enum {
 	AST_ASSIGN,
 	AST_ADD,
 	AST_SUB,
+	AST_UNARY_MINUS,
+	AST_MUL,
+	AST_DIV,
 	AST_SEQ,
 	AST_PRINT,
 	AST_BLOCK,
@@ -30,7 +33,10 @@ typedef enum {
 	AST_FUNC_DECL,
 	AST_FUNC_CALL,
 	AST_RETURN,
-	AST_PARAM_DECL
+	AST_PARAM_DECL,
+	AST_TRY,
+	AST_TRY_CATCH,
+	AST_THROW
 } ASTNodeType;
 
 // 前方宣言
@@ -57,6 +63,7 @@ extern ASTNode* make_regex_node(char* pattern);
 extern ASTNode* make_var_node(char* name);
 extern ASTNode* make_vardecl_node(GincType type, char* var_name, ASTNode* init_expr);
 extern ASTNode* make_binop_node(ASTNodeType type, ASTNode* left, ASTNode* right);
+extern ASTNode* make_unary_node(ASTNodeType type, ASTNode* expr);
 extern ASTNode* make_print_node(ASTNode* arg);
 extern ASTNode* make_if_node(ASTNode* cond, ASTNode* then_body, ASTNode* else_body);
 extern ASTNode* make_while_node(ASTNode* cond, ASTNode* body);
@@ -68,6 +75,9 @@ extern ASTNode* make_func_decl_node(GincType ret_type, char* name, ASTNode* para
 extern ASTNode* make_func_call_node(char* name, ASTNode* args);
 extern ASTNode* make_return_node(ASTNode* expr);
 extern ASTNode* make_param_decl_node(GincType type, char* name);
+extern ASTNode* make_try_node(ASTNode* try_block, char* catch_var, ASTNode* catch_block);
+extern ASTNode* make_try_catch_node(ASTNode* try_body, char* catch_var, ASTNode* catch_body);
+extern ASTNode* make_throw_node(ASTNode* expr);
 extern void print_ast(ASTNode* node, int depth);
 
 extern char const* current_filename;

@@ -1,7 +1,35 @@
 #include <regex.h>
+#include <setjmp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#define MAX_TRY 100
+static void* try_stack[MAX_TRY];
+static int try_depth = 0;
+
+void ginc_push_try(void* jmpbuf) {
+	if (try_depth >= MAX_TRY) {
+		fprintf(stderr, "Ga! Try stack overflow\n");
+		exit(1);
+	}
+	try_stack[try_depth++] = jmpbuf;
+}
+
+void ginc_pop_try() {
+	if (try_depth > 0) try_depth--;
+}
+
+void ginc_throw(int val) {
+	if (val == 0) val = 1;
+	if (try_depth > 0) {
+		void* jmpbuf = try_stack[--try_depth];
+		_longjmp(*((jmp_buf*)jmpbuf), val);
+	} else {
+		fprintf(stderr, "Ga! Uncaught exception: %d\n", val);
+		exit(1);
+	}
+}
 
 int ginc_regex_match(char const* const str, char const* const pattern) {
 	regex_t regex;

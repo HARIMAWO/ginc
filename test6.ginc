@@ -1,0 +1,19 @@
+#!/usr/bin/env ginc
+
+int safe_func(int val) {
+    if (val < 0) {
+        throw 999; // エラーコード999を投げる
+    }
+    return val * 2;
+}
+
+try {
+    print(111);
+    int result = safe_func(-5); // ここで例外発生
+    print(result); // ここは実行されない
+} catch (e) {
+    print(8888); // エラー処理
+    print(e);    // 999 が出力される
+}
+
+print(222); // 通常のフローに復帰

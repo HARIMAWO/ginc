@@ -54,6 +54,14 @@ ASTNode* make_binop_node(ASTNodeType type, ASTNode* left, ASTNode* right) {
 	return node;
 }
 
+ASTNode* make_unary_node(ASTNodeType type, ASTNode* expr) {
+	ASTNode* node = malloc(sizeof(ASTNode));
+	node->type = type;
+	node->left = expr;
+	node->right = NULL;
+	return node;
+}
+
 ASTNode* make_print_node(ASTNode* arg) {
 	ASTNode* node = malloc(sizeof(ASTNode));
 	node->type = AST_PRINT;
@@ -145,6 +153,31 @@ ASTNode* make_param_decl_node(GincType type, char* name) {
 	return node;
 }
 
+ASTNode* make_try_node(ASTNode* try_block, char* catch_var, ASTNode* catch_block) {
+	ASTNode* node = malloc(sizeof(ASTNode));
+	node->type = AST_TRY;
+	node->then_body = try_block;
+	node->var_name = catch_var;
+	node->else_body = catch_block;
+	return node;
+}
+
+ASTNode* make_try_catch_node(ASTNode* try_body, char* catch_var, ASTNode* catch_body) {
+	ASTNode* node = malloc(sizeof(ASTNode));
+	node->type = AST_TRY_CATCH;
+	node->var_name = catch_var;
+	node->left = try_body;
+	node->right = catch_body;
+	return node;
+}
+
+ASTNode* make_throw_node(ASTNode* expr) {
+	ASTNode* node = malloc(sizeof(ASTNode));
+	node->type = AST_THROW;
+	node->left = expr;
+	return node;
+}
+
 // ASTの構造をツリー状に表示するデバッグ関数
 void print_ast(ASTNode* node, int depth) {
 	if (!node) return;
@@ -166,6 +199,9 @@ void print_ast(ASTNode* node, int depth) {
 		case AST_ASSIGN: printf("=\n"); break;
 		case AST_ADD:    printf("+\n"); break;
 		case AST_SUB:    printf("-\n"); break;
+		case AST_UNARY_MINUS: printf("UNARY -\n"); break;
+		case AST_MUL:    printf("*\n"); break;
+		case AST_DIV:    printf("/\n"); break;
 		case AST_SEQ:    printf("SEQ\n"); break;
 		case AST_PRINT:  printf("PRINT\n"); break;
 		case AST_BLOCK:  printf("BLOCK\n"); break;
@@ -181,10 +217,13 @@ void print_ast(ASTNode* node, int depth) {
 		case AST_FUNC_CALL: printf("FUNC_CALL(%s)\n", node->var_name); break;
 		case AST_RETURN: printf("RETURN\n"); break;
 		case AST_PARAM_DECL: printf("PARAM_DECL(%s)\n", node->var_name); break;
+		case AST_TRY: printf("TRY (CATCH %s)\n", node->var_name); break;
+		case AST_TRY_CATCH: printf("TRY_CATCH(%s)\n", node->var_name); break;
+		case AST_THROW: printf("THROW\n"); break;
 	}
 	
 	// 子ノードの再帰表示
-	if (node->type == AST_SEQ || node->type == AST_ASSIGN || node->type == AST_ADD || node->type == AST_SUB || node->type == AST_EQ || node->type == AST_LT || node->type == AST_MATCH) {
+	if (node->type == AST_SEQ || node->type == AST_ASSIGN || node->type == AST_ADD || node->type == AST_SUB || node->type == AST_MUL || node->type == AST_DIV || node->type == AST_EQ || node->type == AST_LT || node->type == AST_MATCH) {
 		print_ast(node->left, depth + 1);
 		print_ast(node->right, depth + 1);
 	} else if (node->type == AST_VARDECL) {
@@ -210,7 +249,13 @@ void print_ast(ASTNode* node, int depth) {
 	} else if (node->type == AST_FUNC_DECL) {
 		if (node->left) print_ast(node->left, depth + 1);
 		if (node->body) print_ast(node->body, depth + 1);
-	} else if (node->type == AST_FUNC_CALL || node->type == AST_RETURN) {
+	} else if (node->type == AST_FUNC_CALL || node->type == AST_RETURN || node->type == AST_THROW || node->type == AST_UNARY_MINUS) {
 		if (node->left) print_ast(node->left, depth + 1);
+	} else if (node->type == AST_TRY) {
+		if (node->then_body) print_ast(node->then_body, depth + 1);
+		if (node->else_body) print_ast(node->else_body, depth + 1);
+	} else if (node->type == AST_TRY_CATCH) {
+		if (node->left) print_ast(node->left, depth + 1);
+		if (node->right) print_ast(node->right, depth + 1);
 	}
 }

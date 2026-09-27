@@ -165,6 +165,23 @@ LLVMValueRef generate_node(ASTNode* node) {
             return LLVMBuildSub(builder, lhs, rhs, "subtmp");
         }
 
+        case AST_UNARY_MINUS: {
+            LLVMValueRef val = generate_node(node->left);
+            return LLVMBuildNeg(builder, val, "negtmp");
+        }
+
+        case AST_MUL: {
+            LLVMValueRef lhs = generate_node(node->left);
+            LLVMValueRef rhs = generate_node(node->right);
+            return LLVMBuildMul(builder, lhs, rhs, "multmp");
+        }
+
+        case AST_DIV: {
+            LLVMValueRef lhs = generate_node(node->left);
+            LLVMValueRef rhs = generate_node(node->right);
+            return LLVMBuildSDiv(builder, lhs, rhs, "divtmp");
+        }
+
         case AST_SEQ: {
             generate_node(node->left);
             generate_node(node->right);
@@ -294,6 +311,180 @@ LLVMValueRef generate_node(ASTNode* node) {
         case AST_PARAM_DECL:
             return NULL;
 
+        case AST_THROW: {
+            LLVMValueRef val = generate_node(node->left);
+            LLVMTypeRef param_types[] = { LLVMInt32TypeInContext(context) };
+            LLVMTypeRef throw_func_type = LLVMFunctionType(LLVMVoidTypeInContext(context), param_types, 1, 0);
+
+            LLVMValueRef throw_func = LLVMGetNamedFunction(module, "ginc_throw");
+            if (!throw_func) {
+                throw_func = LLVMAddFunction(module, "ginc_throw", throw_func_type);
+            }
+
+            LLVMValueRef args[] = { val };
+            LLVMBuildCall2(builder, throw_func_type, throw_func, args, 1, "");
+            LLVMBuildUnreachable(builder);
+            return NULL;
+        }
+
+        case AST_TRY: {
+            LLVMTypeRef ptr_type = LLVMPointerType(LLVMInt8TypeInContext(context), 0);
+            LLVMTypeRef i32_type = LLVMInt32TypeInContext(context);
+
+            // jmp_buf (200バイト分のスタック領域) を確保
+            LLVMTypeRef jmpbuf_type = LLVMArrayType(LLVMInt8TypeInContext(context), 200);
+            LLVMValueRef jmpbuf_alloca = LLVMBuildAlloca(builder, jmpbuf_type, "jmpbuf");
+
+            // _setjmp 宣言
+            LLVMTypeRef setjmp_param_types[] = { ptr_type };
+            LLVMTypeRef setjmp_func_type = LLVMFunctionType(i32_type, setjmp_param_types, 1, 0);
+            LLVMValueRef setjmp_func = LLVMGetNamedFunction(module, "_setjmp");
+            if (!setjmp_func) {
+                setjmp_func = LLVMAddFunction(module, "_setjmp", setjmp_func_type);
+            }
+
+            // ginc_push_try 宣言
+            LLVMTypeRef push_param_types[] = { ptr_type };
+            LLVMTypeRef push_func_type = LLVMFunctionType(LLVMVoidTypeInContext(context), push_param_types, 1, 0);
+            LLVMValueRef push_func = LLVMGetNamedFunction(module, "ginc_push_try");
+            if (!push_func) {
+                push_func = LLVMAddFunction(module, "ginc_push_try", push_func_type);
+            }
+
+            // ginc_pop_try 宣言
+            LLVMTypeRef pop_func_type = LLVMFunctionType(LLVMVoidTypeInContext(context), NULL, 0, 0);
+            LLVMValueRef pop_func = LLVMGetNamedFunction(module, "ginc_pop_try");
+            if (!pop_func) {
+                pop_func = LLVMAddFunction(module, "ginc_pop_try", pop_func_type);
+            }
+
+            // ginc_push_try(jmpbuf) 呼び出し
+            LLVMValueRef push_args[] = { jmpbuf_alloca };
+            LLVMBuildCall2(builder, push_func_type, push_func, push_args, 1, "");
+
+            // _setjmp(jmpbuf) 呼び出し
+            LLVMValueRef setjmp_args[] = { jmpbuf_alloca };
+            LLVMValueRef setjmp_res = LLVMBuildCall2(builder, setjmp_func_type, setjmp_func, setjmp_args, 1, "setjmp_res");
+
+            LLVMValueRef zero = LLVMConstInt(i32_type, 0, 0);
+            LLVMValueRef is_zero = LLVMBuildICmp(builder, LLVMIntEQ, setjmp_res, zero, "is_zero");
+
+            LLVMValueRef parent_func = LLVMGetBasicBlockParent(LLVMGetInsertBlock(builder));
+            LLVMBasicBlockRef try_bb = LLVMAppendBasicBlockInContext(context, parent_func, "try_body");
+            LLVMBasicBlockRef catch_bb = LLVMAppendBasicBlockInContext(context, parent_func, "catch_body");
+            LLVMBasicBlockRef merge_bb = LLVMAppendBasicBlockInContext(context, parent_func, "try_cont");
+
+            LLVMBuildCondBr(builder, is_zero, try_bb, catch_bb);
+
+            // try ブロック生成
+            LLVMPositionBuilderAtEnd(builder, try_bb);
+            generate_node(node->then_body);
+            LLVMBuildCall2(builder, pop_func_type, pop_func, NULL, 0, "");
+            if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(builder))) {
+                LLVMBuildBr(builder, merge_bb);
+            }
+
+            // catch ブロック生成
+            LLVMPositionBuilderAtEnd(builder, catch_bb);
+            if (node->var_name) {
+                LLVMValueRef catch_var_alloca = LLVMBuildAlloca(builder, i32_type, node->var_name);
+                LLVMBuildStore(builder, setjmp_res, catch_var_alloca);
+
+                if (local_count > 0 && local_count < MAX_LOCALS) {
+                    local_names[local_count] = strdup(node->var_name);
+                    local_vars[local_count] = catch_var_alloca;
+                    local_count++;
+                }
+            }
+            generate_node(node->else_body);
+            if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(builder))) {
+                LLVMBuildBr(builder, merge_bb);
+            }
+
+            LLVMPositionBuilderAtEnd(builder, merge_bb);
+            return NULL;
+        }
+
+        case AST_TRY_CATCH: {
+            LLVMTypeRef ptr_type = LLVMPointerType(LLVMInt8TypeInContext(context), 0);
+            LLVMTypeRef i32_type = LLVMInt32TypeInContext(context);
+
+            // 1024バイトのjmpbuf領域を確保
+            LLVMTypeRef jmpbuf_type = LLVMArrayType(LLVMInt8TypeInContext(context), 1024);
+            LLVMValueRef jmpbuf_alloca = LLVMBuildAlloca(builder, jmpbuf_type, "jmpbuf");
+
+            // 関数宣言 (_setjmp, ginc_push_try, ginc_pop_try)
+            LLVMTypeRef setjmp_param_types[] = { ptr_type };
+            LLVMTypeRef setjmp_func_type = LLVMFunctionType(i32_type, setjmp_param_types, 1, 0);
+            LLVMValueRef setjmp_func = LLVMGetNamedFunction(module, "_setjmp");
+            if (!setjmp_func) {
+                setjmp_func = LLVMAddFunction(module, "_setjmp", setjmp_func_type);
+            }
+
+            LLVMTypeRef push_param_types[] = { ptr_type };
+            LLVMTypeRef push_func_type = LLVMFunctionType(LLVMVoidTypeInContext(context), push_param_types, 1, 0);
+            LLVMValueRef push_func = LLVMGetNamedFunction(module, "ginc_push_try");
+            if (!push_func) {
+                push_func = LLVMAddFunction(module, "ginc_push_try", push_func_type);
+            }
+
+            LLVMTypeRef pop_func_type = LLVMFunctionType(LLVMVoidTypeInContext(context), NULL, 0, 0);
+            LLVMValueRef pop_func = LLVMGetNamedFunction(module, "ginc_pop_try");
+            if (!pop_func) {
+                pop_func = LLVMAddFunction(module, "ginc_pop_try", pop_func_type);
+            }
+
+            // ginc_push_try(jmpbuf) & _setjmp(jmpbuf)
+            LLVMValueRef push_args[] = { jmpbuf_alloca };
+            LLVMBuildCall2(builder, push_func_type, push_func, push_args, 1, "");
+
+            LLVMValueRef setjmp_args[] = { jmpbuf_alloca };
+            LLVMValueRef setjmp_res = LLVMBuildCall2(builder, setjmp_func_type, setjmp_func, setjmp_args, 1, "setjmp_res");
+
+            LLVMValueRef zero = LLVMConstInt(i32_type, 0, 0);
+            LLVMValueRef is_zero = LLVMBuildICmp(builder, LLVMIntEQ, setjmp_res, zero, "is_zero");
+
+            LLVMValueRef parent_func = LLVMGetBasicBlockParent(LLVMGetInsertBlock(builder));
+            LLVMBasicBlockRef try_bb = LLVMAppendBasicBlockInContext(context, parent_func, "try_body");
+            LLVMBasicBlockRef catch_bb = LLVMAppendBasicBlockInContext(context, parent_func, "catch_body");
+            LLVMBasicBlockRef merge_bb = LLVMAppendBasicBlockInContext(context, parent_func, "try_cont");
+
+            LLVMBuildCondBr(builder, is_zero, try_bb, catch_bb);
+
+            // [try_bb]
+            LLVMPositionBuilderAtEnd(builder, try_bb);
+            generate_node(node->left);
+            if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(builder))) {
+                LLVMBuildCall2(builder, pop_func_type, pop_func, NULL, 0, "");
+                LLVMBuildBr(builder, merge_bb);
+            }
+
+            // [catch_bb]
+            LLVMPositionBuilderAtEnd(builder, catch_bb);
+            if (node->var_name) {
+                LLVMValueRef catch_var_alloca = NULL;
+                if (local_count > 0) { // 関数内
+                    catch_var_alloca = LLVMBuildAlloca(builder, i32_type, node->var_name);
+                    if (local_count < MAX_LOCALS) {
+                        local_names[local_count] = strdup(node->var_name);
+                        local_vars[local_count] = catch_var_alloca;
+                        local_count++;
+                    }
+                } else { // トップレベル
+                    catch_var_alloca = LLVMAddGlobal(module, i32_type, node->var_name);
+                    LLVMSetInitializer(catch_var_alloca, LLVMConstNull(i32_type));
+                }
+                LLVMBuildStore(builder, setjmp_res, catch_var_alloca);
+            }
+            generate_node(node->right);
+            if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(builder))) {
+                LLVMBuildBr(builder, merge_bb);
+            }
+
+            LLVMPositionBuilderAtEnd(builder, merge_bb);
+            return NULL;
+        }
+
         case AST_RETURN: {
             LLVMValueRef ret_val = generate_node(node->left);
             return LLVMBuildRet(builder, ret_val);
@@ -418,6 +609,18 @@ void generate_code(ASTNode* root) {
 
     int ginc_regex_match(char const* str, char const* pattern);
     LLVMAddSymbol("ginc_regex_match", (void*)ginc_regex_match);
+
+    void ginc_push_try(void* jmpbuf);
+    LLVMAddSymbol("ginc_push_try", (void*)ginc_push_try);
+
+    void ginc_pop_try(void);
+    LLVMAddSymbol("ginc_pop_try", (void*)ginc_pop_try);
+
+    void ginc_throw(int val);
+    LLVMAddSymbol("ginc_throw", (void*)ginc_throw);
+
+    int _setjmp(void* env);
+    LLVMAddSymbol("_setjmp", (void*)_setjmp);
 
     LLVMExecutionEngineRef engine;
     LLVMLinkInMCJIT();

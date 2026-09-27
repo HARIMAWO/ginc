@@ -72,6 +72,9 @@ int yylex() {
         "=~" { update_location(tok, cursor); return T_MATCH; }
         "int" { update_location(tok, cursor); return T_INT_TYPE; }
         "str" { update_location(tok, cursor); return T_STR_TYPE; }
+        "try" { update_location(tok, cursor); return T_TRY; }
+        "catch" { update_location(tok, cursor); return T_CATCH; }
+        "throw" { update_location(tok, cursor); return T_THROW; }
         "if" { update_location(tok, cursor); return T_IF; }
         "else" { update_location(tok, cursor); return T_ELSE; }
         "while" { update_location(tok, cursor); return T_WHILE; }
@@ -88,6 +91,8 @@ int yylex() {
         "<" { update_location(tok, cursor); return T_LT; }
         "+" { update_location(tok, cursor); return T_PLUS; }
         "-" { update_location(tok, cursor); return T_MINUS; }
+        "*" { update_location(tok, cursor); return T_STAR; }
+        "/" { update_location(tok, cursor); return T_SLASH; }
         ";" { update_location(tok, cursor); return T_SEMI; }
         "(" { update_location(tok, cursor); return T_LPAREN; }
         ")" { update_location(tok, cursor); return T_RPAREN; }
