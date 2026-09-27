@@ -162,12 +162,13 @@ ASTNode* make_try_node(ASTNode* try_block, char* catch_var, ASTNode* catch_block
 	return node;
 }
 
-ASTNode* make_try_catch_node(ASTNode* try_body, char* catch_var, ASTNode* catch_body) {
+ASTNode* make_try_catch_node(ASTNode* try_body, char* catch_var, ASTNode* catch_body, ASTNode* finally_body) {
 	ASTNode* node = malloc(sizeof(ASTNode));
 	node->type = AST_TRY_CATCH;
 	node->var_name = catch_var;
 	node->left = try_body;
 	node->right = catch_body;
+	node->finally_body = finally_body;
 	return node;
 }
 
@@ -285,6 +286,7 @@ void print_ast(ASTNode* node, int depth) {
 	} else if (node->type == AST_TRY_CATCH || node->type == AST_INDEX_ASSIGN) {
 		if (node->left) print_ast(node->left, depth + 1);
 		if (node->right) print_ast(node->right, depth + 1);
+		if (node->finally_body) print_ast(node->finally_body, depth + 1);
 	} else if (node->type == AST_CLASS_DEF) {
 		if (node->left) print_ast(node->left, depth + 1);
 	}

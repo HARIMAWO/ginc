@@ -16,9 +16,9 @@ ASTNode* root_node;
 
 %token <num> T_NUM
 %token <str> T_IDENT T_STR T_STRING T_REGEX
-%token T_INT_TYPE T_STR_TYPE T_VAR_TYPE T_ASSIGN T_PLUS T_MINUS T_STAR T_SLASH T_SEMI T_PRINT T_LPAREN T_RPAREN T_IF T_ELSE T_WHILE T_LBRACE T_RBRACE T_EQ T_LT T_MATCH T_LBRACKET T_RBRACKET T_COMMA T_RETURN T_TRY T_CATCH T_THROW T_DOT T_CLASS
+%token T_INT_TYPE T_STR_TYPE T_VAR_TYPE T_ASSIGN T_PLUS T_MINUS T_STAR T_SLASH T_SEMI T_PRINT T_LPAREN T_RPAREN T_IF T_ELSE T_WHILE T_LBRACE T_RBRACE T_EQ T_LT T_MATCH T_LBRACKET T_RBRACKET T_COMMA T_RETURN T_TRY T_CATCH T_THROW T_FINALLY T_DOT T_CLASS
 
-%type <ast> stmt_list stmt expr expr_list param_list member_decl member_list
+%type <ast> stmt_list stmt expr expr_list param_list member_decl member_list finally_clause
 
 %left T_MATCH
 %left T_EQ T_LT
@@ -61,6 +61,11 @@ member_list:
     | member_decl member_list { $$ = make_expr_list_node($1, $2); }
     ;
 
+finally_clause:
+    /* empty */ { $$ = NULL; }
+    | T_FINALLY T_LBRACE stmt_list T_RBRACE { $$ = $3; }
+    ;
+
 stmt:
     T_INT_TYPE T_IDENT T_LPAREN param_list T_RPAREN T_LBRACE stmt_list T_RBRACE {
         $$ = make_func_decl_node(TYPE_INT, $2, $4, $7);
@@ -71,8 +76,8 @@ stmt:
     | T_RETURN expr T_SEMI {
         $$ = make_return_node($2);
     }
-    | T_TRY T_LBRACE stmt_list T_RBRACE T_CATCH T_LPAREN T_IDENT T_RPAREN T_LBRACE stmt_list T_RBRACE {
-        $$ = make_try_catch_node($3, $7, $10);
+    | T_TRY T_LBRACE stmt_list T_RBRACE T_CATCH T_LPAREN T_IDENT T_RPAREN T_LBRACE stmt_list T_RBRACE finally_clause {
+        $$ = make_try_catch_node($3, $7, $10, $12);
     }
     | T_TRY stmt T_CATCH T_LPAREN T_IDENT T_RPAREN stmt {
         $$ = make_try_node($2, $5, $7);

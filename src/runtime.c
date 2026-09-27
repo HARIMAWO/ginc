@@ -131,3 +131,10 @@ GincValue* ginc_hash_get(void* ht_ptr, char const* key) {
 	ginc_throw(102);
 	return NULL;
 }
+
+int ginc_unwrap_int(GincValue* val) {
+	if (!val) return 0;
+	if (val->type == VAL_INT) return val->data.i;
+	if (val->type == VAL_STR) return atoi(val->data.s);
+	return 0;
+}

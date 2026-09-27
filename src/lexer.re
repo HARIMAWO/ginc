@@ -83,6 +83,7 @@ int yylex() {
         }
         "try" { update_location(tok, cursor); return T_TRY; }
         "catch" { update_location(tok, cursor); return T_CATCH; }
+        "finally" { update_location(tok, cursor); return T_FINALLY; }
         "throw" { update_location(tok, cursor); return T_THROW; }
         "if" { update_location(tok, cursor); return T_IF; }
         "else" { update_location(tok, cursor); return T_ELSE; }

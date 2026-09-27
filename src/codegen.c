@@ -21,6 +21,12 @@ static int local_count = 0;
 LLVMValueRef generate_node(ASTNode* node) {
     if (!node) return NULL;
 
+    // 現在のブロックがすでにターミネータ(returnやthrow等)を持っている場合は、
+    // 後続のノード（デッドコード）のIR生成をスキップする
+    if (LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(builder))) {
+        return NULL;
+    }
+
     switch (node->type) {
         case AST_NUM:
             return LLVMConstInt(LLVMInt32TypeInContext(context), node->val, 0);
@@ -53,6 +59,19 @@ LLVMValueRef generate_node(ASTNode* node) {
         case AST_VARDECL: {
             LLVMValueRef init_val = generate_node(node->right);
             if (!init_val) return NULL;
+
+            if (LLVMGetTypeKind(LLVMTypeOf(init_val)) == LLVMPointerTypeKind) {
+                LLVMTypeRef ptr_type = LLVMPointerType(LLVMInt8TypeInContext(context), 0);
+                LLVMTypeRef param_types[] = { ptr_type };
+                LLVMTypeRef unwrap_type = LLVMFunctionType(LLVMInt32TypeInContext(context), param_types, 1, 0);
+                LLVMValueRef unwrap_func = LLVMGetNamedFunction(module, "ginc_unwrap_int");
+                if (!unwrap_func) {
+                    unwrap_func = LLVMAddFunction(module, "ginc_unwrap_int", unwrap_type);
+                }
+                LLVMValueRef args[] = { init_val };
+                init_val = LLVMBuildCall2(builder, unwrap_type, unwrap_func, args, 1, "unwrapped");
+            }
+
             if (local_count > 0) { // 関数内のローカル変数
                 LLVMValueRef alloca_inst = LLVMBuildAlloca(builder, LLVMInt32TypeInContext(context), node->var_name);
                 local_names[local_count] = strdup(node->var_name);
@@ -277,6 +296,19 @@ LLVMValueRef generate_node(ASTNode* node) {
         case AST_ASSIGN: {
             LLVMValueRef rhs = generate_node(node->right);
             if (!rhs) return NULL;
+
+            if (LLVMGetTypeKind(LLVMTypeOf(rhs)) == LLVMPointerTypeKind) {
+                LLVMTypeRef ptr_type = LLVMPointerType(LLVMInt8TypeInContext(context), 0);
+                LLVMTypeRef param_types[] = { ptr_type };
+                LLVMTypeRef unwrap_type = LLVMFunctionType(LLVMInt32TypeInContext(context), param_types, 1, 0);
+                LLVMValueRef unwrap_func = LLVMGetNamedFunction(module, "ginc_unwrap_int");
+                if (!unwrap_func) {
+                    unwrap_func = LLVMAddFunction(module, "ginc_unwrap_int", unwrap_type);
+                }
+                LLVMValueRef args[] = { rhs };
+                rhs = LLVMBuildCall2(builder, unwrap_type, unwrap_func, args, 1, "unwrapped");
+            }
+
             char const* const var_name = node->left->var_name;
             LLVMValueRef var = NULL;
             for (int i = local_count - 1; i >= 1; i--) {
@@ -581,11 +613,9 @@ LLVMValueRef generate_node(ASTNode* node) {
             LLVMTypeRef ptr_type = LLVMPointerType(LLVMInt8TypeInContext(context), 0);
             LLVMTypeRef i32_type = LLVMInt32TypeInContext(context);
 
-            // 1024バイトのjmpbuf領域を確保
             LLVMTypeRef jmpbuf_type = LLVMArrayType(LLVMInt8TypeInContext(context), 1024);
             LLVMValueRef jmpbuf_alloca = LLVMBuildAlloca(builder, jmpbuf_type, "jmpbuf");
 
-            // 関数宣言 (_setjmp, ginc_push_try, ginc_pop_try)
             LLVMTypeRef setjmp_param_types[] = { ptr_type };
             LLVMTypeRef setjmp_func_type = LLVMFunctionType(i32_type, setjmp_param_types, 1, 0);
             LLVMValueRef setjmp_func = LLVMGetNamedFunction(module, "_setjmp");
@@ -606,7 +636,6 @@ LLVMValueRef generate_node(ASTNode* node) {
                 pop_func = LLVMAddFunction(module, "ginc_pop_try", pop_func_type);
             }
 
-            // ginc_push_try(jmpbuf) & _setjmp(jmpbuf)
             LLVMValueRef push_args[] = { jmpbuf_alloca };
             LLVMBuildCall2(builder, push_func_type, push_func, push_args, 1, "");
 
@@ -616,22 +645,24 @@ LLVMValueRef generate_node(ASTNode* node) {
             LLVMValueRef zero = LLVMConstInt(i32_type, 0, 0);
             LLVMValueRef is_zero = LLVMBuildICmp(builder, LLVMIntEQ, setjmp_res, zero, "is_zero");
 
-            LLVMValueRef parent_func = LLVMGetBasicBlockParent(LLVMGetInsertBlock(builder));
-            LLVMBasicBlockRef try_bb = LLVMAppendBasicBlockInContext(context, parent_func, "try_body");
-            LLVMBasicBlockRef catch_bb = LLVMAppendBasicBlockInContext(context, parent_func, "catch_body");
-            LLVMBasicBlockRef merge_bb = LLVMAppendBasicBlockInContext(context, parent_func, "try_cont");
+            LLVMValueRef func = LLVMGetBasicBlockParent(LLVMGetInsertBlock(builder));
+            LLVMBasicBlockRef try_bb = LLVMAppendBasicBlockInContext(context, func, "try_body");
+            LLVMBasicBlockRef catch_bb = LLVMAppendBasicBlockInContext(context, func, "catch_body");
+            LLVMBasicBlockRef finally_bb = LLVMAppendBasicBlockInContext(context, func, "finally_body");
+            LLVMBasicBlockRef merge_bb = LLVMAppendBasicBlockInContext(context, func, "try_cont");
 
             LLVMBuildCondBr(builder, is_zero, try_bb, catch_bb);
 
-            // [try_bb]
+            // [try_body]
             LLVMPositionBuilderAtEnd(builder, try_bb);
             generate_node(node->left);
             if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(builder))) {
-                LLVMBuildCall2(builder, pop_func_type, pop_func, NULL, 0, "");
-                LLVMBuildBr(builder, merge_bb);
+                LLVMValueRef pop_fn = LLVMGetNamedFunction(module, "ginc_pop_try");
+                LLVMBuildCall2(builder, LLVMGlobalGetValueType(pop_fn), pop_fn, NULL, 0, "");
+                LLVMBuildBr(builder, finally_bb);
             }
 
-            // [catch_bb]
+            // [catch_body]
             LLVMPositionBuilderAtEnd(builder, catch_bb);
             if (node->var_name) {
                 LLVMValueRef catch_var_alloca = NULL;
@@ -649,6 +680,15 @@ LLVMValueRef generate_node(ASTNode* node) {
                 LLVMBuildStore(builder, setjmp_res, catch_var_alloca);
             }
             generate_node(node->right);
+            if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(builder))) {
+                LLVMBuildBr(builder, finally_bb);
+            }
+
+            // [finally_body]
+            LLVMPositionBuilderAtEnd(builder, finally_bb);
+            if (node->finally_body) {
+                generate_node(node->finally_body);
+            }
             if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(builder))) {
                 LLVMBuildBr(builder, merge_bb);
             }
@@ -811,6 +851,9 @@ void generate_code(ASTNode* root) {
 
     void* ginc_hash_get(void* ht, char const* key);
     LLVMAddSymbol("ginc_hash_get", (void*)ginc_hash_get);
+
+    int ginc_unwrap_int(void* val);
+    LLVMAddSymbol("ginc_unwrap_int", (void*)ginc_unwrap_int);
 
     LLVMExecutionEngineRef engine;
     LLVMLinkInMCJIT();
