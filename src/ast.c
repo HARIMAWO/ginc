@@ -195,6 +195,14 @@ ASTNode* make_index_assign_node(char* name, ASTNode* index, ASTNode* rhs) {
 	return node;
 }
 
+ASTNode* make_class_def_node(char* name, ASTNode* members) {
+	ASTNode* node = malloc(sizeof(ASTNode));
+	node->type = AST_CLASS_DEF;
+	node->var_name = name;
+	node->left = members;
+	return node;
+}
+
 // ASTの構造をツリー状に表示するデバッグ関数
 void print_ast(ASTNode* node, int depth) {
 	if (!node) return;
@@ -239,6 +247,7 @@ void print_ast(ASTNode* node, int depth) {
 		case AST_THROW: printf("THROW\n"); break;
 		case AST_HASH_DECL: printf("HASH_DECL(%s)\n", node->var_name); break;
 		case AST_INDEX_ASSIGN: printf("INDEX_ASSIGN(%s)\n", node->var_name); break;
+		case AST_CLASS_DEF: printf("CLASS_DEF(%s)\n", node->var_name); break;
 	}
 	
 	// 子ノードの再帰表示
@@ -276,5 +285,7 @@ void print_ast(ASTNode* node, int depth) {
 	} else if (node->type == AST_TRY_CATCH || node->type == AST_INDEX_ASSIGN) {
 		if (node->left) print_ast(node->left, depth + 1);
 		if (node->right) print_ast(node->right, depth + 1);
+	} else if (node->type == AST_CLASS_DEF) {
+		if (node->left) print_ast(node->left, depth + 1);
 	}
 }

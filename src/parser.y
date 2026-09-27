@@ -16,9 +16,9 @@ ASTNode* root_node;
 
 %token <num> T_NUM
 %token <str> T_IDENT T_STR T_STRING T_REGEX
-%token T_INT_TYPE T_STR_TYPE T_ASSIGN T_PLUS T_MINUS T_STAR T_SLASH T_SEMI T_PRINT T_LPAREN T_RPAREN T_IF T_ELSE T_WHILE T_LBRACE T_RBRACE T_EQ T_LT T_MATCH T_LBRACKET T_RBRACKET T_COMMA T_RETURN T_TRY T_CATCH T_THROW T_DOT T_CLASS
+%token T_INT_TYPE T_STR_TYPE T_VAR_TYPE T_ASSIGN T_PLUS T_MINUS T_STAR T_SLASH T_SEMI T_PRINT T_LPAREN T_RPAREN T_IF T_ELSE T_WHILE T_LBRACE T_RBRACE T_EQ T_LT T_MATCH T_LBRACKET T_RBRACKET T_COMMA T_RETURN T_TRY T_CATCH T_THROW T_DOT T_CLASS
 
-%type <ast> stmt_list stmt expr expr_list param_list
+%type <ast> stmt_list stmt expr expr_list param_list member_decl member_list
 
 %left T_MATCH
 %left T_EQ T_LT
@@ -50,6 +50,17 @@ param_list:
     | T_STR_TYPE T_IDENT T_COMMA param_list { $$ = make_expr_list_node(make_param_decl_node(TYPE_STR, $2), $4); }
     ;
 
+member_decl:
+    T_INT_TYPE T_IDENT T_SEMI { $$ = make_param_decl_node(TYPE_INT, $2); }
+    | T_STR_TYPE T_IDENT T_SEMI { $$ = make_param_decl_node(TYPE_STR, $2); }
+    | T_VAR_TYPE T_IDENT T_SEMI { $$ = make_param_decl_node(TYPE_VAR, $2); }
+    ;
+
+member_list:
+    /* empty */ { $$ = NULL; }
+    | member_decl member_list { $$ = make_expr_list_node($1, $2); }
+    ;
+
 stmt:
     T_INT_TYPE T_IDENT T_LPAREN param_list T_RPAREN T_LBRACE stmt_list T_RBRACE {
         $$ = make_func_decl_node(TYPE_INT, $2, $4, $7);
@@ -69,6 +80,9 @@ stmt:
     | T_THROW expr T_SEMI {
         $$ = make_throw_node($2);
     }
+    | T_CLASS T_IDENT T_LBRACE member_list T_RBRACE T_SEMI {
+        $$ = make_class_def_node($2, $4);
+    }
     | T_CLASS T_IDENT T_IDENT T_SEMI {
         $$ = make_hash_decl_node(TYPE_INT, $3, TYPE_STR);
     }
@@ -77,6 +91,9 @@ stmt:
     }
     | T_INT_TYPE T_IDENT T_LBRACKET T_STR_TYPE T_RBRACKET T_SEMI {
         $$ = make_hash_decl_node(TYPE_INT, $2, TYPE_STR);
+    }
+    | T_VAR_TYPE T_IDENT T_LBRACKET T_STR_TYPE T_RBRACKET T_SEMI {
+        $$ = make_hash_decl_node(TYPE_VAR, $2, TYPE_STR);
     }
     | T_IDENT T_LBRACKET expr T_RBRACKET T_ASSIGN expr T_SEMI {
         $$ = make_index_assign_node($1, $3, $6);

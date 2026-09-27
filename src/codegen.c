@@ -68,6 +68,9 @@ LLVMValueRef generate_node(ASTNode* node) {
             }
         }
 
+        case AST_CLASS_DEF:
+            return NULL;
+
         case AST_HASH_DECL: {
             LLVMTypeRef ptr_type = LLVMPointerType(LLVMInt8TypeInContext(context), 0);
             LLVMTypeRef func_type = LLVMFunctionType(ptr_type, NULL, 0, 0);

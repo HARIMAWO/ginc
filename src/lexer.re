@@ -70,6 +70,7 @@ int yylex() {
             return T_REGEX;
         }
         "=~" { update_location(tok, cursor); return T_MATCH; }
+        "var" { update_location(tok, cursor); return T_VAR_TYPE; }
         "int" { update_location(tok, cursor); return T_INT_TYPE; }
         "str" { update_location(tok, cursor); return T_STR_TYPE; }
         "class" { update_location(tok, cursor); return T_CLASS; }
