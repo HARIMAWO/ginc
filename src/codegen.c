@@ -110,6 +110,36 @@ LLVMValueRef generate_node(ASTNode* node) {
             LLVMValueRef idx_val = generate_node(node->left);
             if (!idx_val) return NULL;
 
+            // 境界チェック (Bounds Checking)
+            unsigned int const array_len = LLVMGetArrayLength(array_type);
+            LLVMValueRef len_val = LLVMConstInt(LLVMInt32TypeInContext(context), array_len, 0);
+
+            // 符号なし比較 UGE (unsigned greater than or equal) により、負数(2の補数)と上限オーバーの両方を判定
+            LLVMValueRef is_oob = LLVMBuildICmp(builder, LLVMIntUGE, idx_val, len_val, "is_oob");
+
+            LLVMValueRef parent_func = LLVMGetBasicBlockParent(LLVMGetInsertBlock(builder));
+            LLVMBasicBlockRef oob_bb = LLVMAppendBasicBlockInContext(context, parent_func, "array_oob");
+            LLVMBasicBlockRef inbounds_bb = LLVMAppendBasicBlockInContext(context, parent_func, "array_inbounds");
+
+            LLVMBuildCondBr(builder, is_oob, oob_bb, inbounds_bb);
+
+            // 範囲外 (Out of Bounds) ブロック
+            LLVMPositionBuilderAtEnd(builder, oob_bb);
+            LLVMTypeRef param_types[] = { LLVMInt32TypeInContext(context) };
+            LLVMTypeRef throw_func_type = LLVMFunctionType(LLVMVoidTypeInContext(context), param_types, 1, 0);
+
+            LLVMValueRef throw_func = LLVMGetNamedFunction(module, "ginc_throw");
+            if (!throw_func) {
+                throw_func = LLVMAddFunction(module, "ginc_throw", throw_func_type);
+            }
+
+            LLVMValueRef err_code = LLVMConstInt(LLVMInt32TypeInContext(context), 101, 0);
+            LLVMValueRef args[] = { err_code };
+            LLVMBuildCall2(builder, throw_func_type, throw_func, args, 1, "");
+            LLVMBuildUnreachable(builder);
+
+            // 正常範囲内ブロック
+            LLVMPositionBuilderAtEnd(builder, inbounds_bb);
             LLVMValueRef indices[] = {
                 LLVMConstInt(LLVMInt32TypeInContext(context), 0, 0),
                 idx_val

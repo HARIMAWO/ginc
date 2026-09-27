@@ -1,0 +1,10 @@
+#!/usr/bin/env ginc
+
+int list[5] = { 10, 20, 30, 40, 50 };
+
+try {
+    print(list[11]); // ここで意図的に範囲外アクセス！
+} catch (e) {
+    print(8888);
+    print(e); // 境界エラーのコード「101」が出力されるはず
+}
