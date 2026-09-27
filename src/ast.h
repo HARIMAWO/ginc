@@ -41,7 +41,8 @@ typedef enum {
 	AST_HASH_DECL,
 	AST_INDEX_ASSIGN,
 	AST_CLASS_DEF,
-	AST_CATCH_BLOCK
+	AST_CATCH_BLOCK,
+	AST_METHOD_CALL
 } ASTNodeType;
 
 // 前方宣言
@@ -90,6 +91,7 @@ extern ASTNode* make_throw_node(ASTNode* expr);
 extern ASTNode* make_hash_decl_node(GincType val_type, char* name, GincType key_type);
 extern ASTNode* make_index_assign_node(char* name, ASTNode* index, ASTNode* rhs);
 extern ASTNode* make_class_def_node(char* name, ASTNode* members);
+extern ASTNode* make_method_call_node(char* obj_name, char* method_name, ASTNode* args);
 extern void print_ast(ASTNode* node, int depth);
 
 extern char const* current_filename;

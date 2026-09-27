@@ -50,6 +50,10 @@ LLVMValueRef generate_node(ASTNode* node) {
             }
             LLVMValueRef var = LLVMGetNamedGlobal(module, node->var_name);
             if (!var) {
+                LLVMValueRef fn = LLVMGetNamedFunction(module, node->var_name);
+                if (fn && LLVMIsAFunction(fn)) {
+                    return fn;
+                }
                 fprintf(stderr, "Ga! (Codegen Error): Unknown variable '%s'\n", node->var_name);
                 return NULL;
             }
@@ -60,7 +64,7 @@ LLVMValueRef generate_node(ASTNode* node) {
             LLVMValueRef init_val = generate_node(node->right);
             if (!init_val) return NULL;
 
-            if (LLVMGetTypeKind(LLVMTypeOf(init_val)) == LLVMPointerTypeKind) {
+            if (LLVMGetTypeKind(LLVMTypeOf(init_val)) == LLVMPointerTypeKind && !LLVMIsAFunction(init_val)) {
                 LLVMTypeRef ptr_type = LLVMPointerType(LLVMInt8TypeInContext(context), 0);
                 LLVMTypeRef param_types[] = { ptr_type };
                 LLVMTypeRef unwrap_type = LLVMFunctionType(LLVMInt32TypeInContext(context), param_types, 1, 0);
@@ -261,6 +265,15 @@ LLVMValueRef generate_node(ASTNode* node) {
                     }
                     LLVMValueRef args[] = { rhs_val };
                     boxed_val = LLVMBuildCall2(builder, mk_func_type, mk_func, args, 1, "boxed_int");
+                } else if (LLVMIsAFunction(rhs_val)) {
+                    LLVMTypeRef param_types[] = { ptr_type };
+                    LLVMTypeRef mk_func_type = LLVMFunctionType(ptr_type, param_types, 1, 0);
+                    LLVMValueRef mk_func = LLVMGetNamedFunction(module, "ginc_make_func");
+                    if (!mk_func) {
+                        mk_func = LLVMAddFunction(module, "ginc_make_func", mk_func_type);
+                    }
+                    LLVMValueRef args[] = { rhs_val };
+                    boxed_val = LLVMBuildCall2(builder, mk_func_type, mk_func, args, 1, "boxed_func");
                 } else {
                     LLVMTypeRef param_types[] = { ptr_type };
                     LLVMTypeRef mk_func_type = LLVMFunctionType(ptr_type, param_types, 1, 0);
@@ -305,7 +318,7 @@ LLVMValueRef generate_node(ASTNode* node) {
             LLVMValueRef rhs = generate_node(node->right);
             if (!rhs) return NULL;
 
-            if (LLVMGetTypeKind(LLVMTypeOf(rhs)) == LLVMPointerTypeKind) {
+            if (LLVMGetTypeKind(LLVMTypeOf(rhs)) == LLVMPointerTypeKind && !LLVMIsAFunction(rhs)) {
                 LLVMTypeRef ptr_type = LLVMPointerType(LLVMInt8TypeInContext(context), 0);
                 LLVMTypeRef param_types[] = { ptr_type };
                 LLVMTypeRef unwrap_type = LLVMFunctionType(LLVMInt32TypeInContext(context), param_types, 1, 0);
@@ -789,6 +802,60 @@ LLVMValueRef generate_node(ASTNode* node) {
         case AST_CATCH_BLOCK:
             return NULL;
 
+        case AST_METHOD_CALL: {
+            char const* const obj_name = node->var_name;
+            char const* const method_name = node->str_val;
+
+            LLVMValueRef ht_var = NULL;
+            for (int i = local_count - 1; i >= 1; i--) {
+                if (local_names[i] && strcmp(local_names[i], obj_name) == 0) {
+                    ht_var = local_vars[i]; break;
+                }
+            }
+            if (!ht_var) ht_var = LLVMGetNamedGlobal(module, obj_name);
+            if (!ht_var) {
+                fprintf(stderr, "Ga! (Codegen Error): Unknown object '%s'\n", obj_name);
+                return NULL;
+            }
+
+            LLVMTypeRef ptr_type = LLVMPointerType(LLVMInt8TypeInContext(context), 0);
+            LLVMValueRef ht_ptr = LLVMBuildLoad2(builder, ptr_type, ht_var, obj_name);
+            LLVMValueRef key_val = LLVMBuildGlobalStringPtr(builder, method_name, "method_key");
+
+            LLVMTypeRef get_param_types[] = { ptr_type, ptr_type };
+            LLVMTypeRef get_func_type = LLVMFunctionType(ptr_type, get_param_types, 2, 0);
+            LLVMValueRef get_func = LLVMGetNamedFunction(module, "ginc_hash_get");
+            if (!get_func) {
+                get_func = LLVMAddFunction(module, "ginc_hash_get", get_func_type);
+            }
+            LLVMValueRef get_args[] = { ht_ptr, key_val };
+            LLVMValueRef boxed_func = LLVMBuildCall2(builder, get_func_type, get_func, get_args, 2, "boxed_method");
+
+            LLVMTypeRef unwrap_param_types[] = { ptr_type };
+            LLVMTypeRef unwrap_func_type = LLVMFunctionType(ptr_type, unwrap_param_types, 1, 0);
+            LLVMValueRef unwrap_func = LLVMGetNamedFunction(module, "ginc_unwrap_func");
+            if (!unwrap_func) {
+                unwrap_func = LLVMAddFunction(module, "ginc_unwrap_func", unwrap_func_type);
+            }
+            LLVMValueRef unwrap_args[] = { boxed_func };
+            LLVMValueRef raw_func = LLVMBuildCall2(builder, unwrap_func_type, unwrap_func, unwrap_args, 1, "raw_method");
+
+            LLVMValueRef args[16];
+            LLVMTypeRef arg_types[16];
+            int arg_count = 0;
+            ASTNode* curr_arg = node->left;
+            while (curr_arg && arg_count < 16) {
+                LLVMValueRef arg_val = generate_node(curr_arg->left);
+                args[arg_count] = arg_val;
+                arg_types[arg_count] = LLVMTypeOf(arg_val);
+                arg_count++;
+                curr_arg = curr_arg->right;
+            }
+
+            LLVMTypeRef method_type = LLVMFunctionType(LLVMInt32TypeInContext(context), arg_types, arg_count, 0);
+            return LLVMBuildCall2(builder, method_type, raw_func, args, arg_count, "method_res");
+        }
+
         case AST_RETURN: {
             LLVMValueRef ret_val = generate_node(node->left);
             return LLVMBuildRet(builder, ret_val);
@@ -935,6 +1002,12 @@ void generate_code(ASTNode* root) {
 
     void* ginc_make_str(char const* v);
     LLVMAddSymbol("ginc_make_str", (void*)ginc_make_str);
+
+    void* ginc_make_func(void* f);
+    LLVMAddSymbol("ginc_make_func", (void*)ginc_make_func);
+
+    void* ginc_unwrap_func(void* val);
+    LLVMAddSymbol("ginc_unwrap_func", (void*)ginc_unwrap_func);
 
     void ginc_print_val(void* val);
     LLVMAddSymbol("ginc_print_val", (void*)ginc_print_val);

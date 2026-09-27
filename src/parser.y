@@ -174,6 +174,8 @@ expr:
     | T_REGEX { $$ = make_regex_node($1); }
     | T_IDENT T_LPAREN expr_list T_RPAREN { $$ = make_func_call_node($1, $3); }
     | T_IDENT T_LPAREN T_RPAREN { $$ = make_func_call_node($1, NULL); }
+    | T_IDENT T_DOT T_IDENT T_LPAREN expr_list T_RPAREN { $$ = make_method_call_node($1, $3, $5); }
+    | T_IDENT T_DOT T_IDENT T_LPAREN T_RPAREN { $$ = make_method_call_node($1, $3, NULL); }
     | T_IDENT T_DOT T_IDENT { $$ = make_array_access_node($1, make_string_node($3)); }
     | T_IDENT T_LBRACKET expr T_RBRACKET { $$ = make_array_access_node($1, $3); }
     | T_IDENT { $$ = make_var_node($1); }

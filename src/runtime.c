@@ -60,8 +60,8 @@ char* ginc_str_concat(char const* const s1, char const* const s2) {
 }
 
 #define HASH_SIZE 128
-typedef enum { VAL_INT, VAL_STR } ValType;
-typedef struct { ValType type; union { int i; char* s; } data; } GincValue;
+typedef enum { VAL_INT, VAL_STR, VAL_FUNC } ValType;
+typedef struct { ValType type; union { int i; char* s; void* f; } data; } GincValue;
 typedef struct HashNode { char* key; GincValue* value; struct HashNode* next; } HashNode;
 typedef struct { HashNode* buckets[HASH_SIZE]; } HashTable;
 
@@ -88,6 +88,18 @@ GincValue* ginc_make_str(char const* v) {
 	val->type = VAL_STR;
 	val->data.s = strdup(v);
 	return val;
+}
+
+GincValue* ginc_make_func(void* f) {
+	GincValue* val = malloc(sizeof(GincValue));
+	val->type = VAL_FUNC;
+	val->data.f = f;
+	return val;
+}
+
+void* ginc_unwrap_func(GincValue* val) {
+	if (val && val->type == VAL_FUNC) return val->data.f;
+	return NULL;
 }
 
 void ginc_print_val(GincValue* val) {

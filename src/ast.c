@@ -214,6 +214,15 @@ ASTNode* make_class_def_node(char* name, ASTNode* members) {
 	return node;
 }
 
+ASTNode* make_method_call_node(char* obj_name, char* method_name, ASTNode* args) {
+	ASTNode* node = malloc(sizeof(ASTNode));
+	node->type = AST_METHOD_CALL;
+	node->var_name = obj_name;
+	node->str_val = method_name;
+	node->left = args;
+	return node;
+}
+
 // ASTの構造をツリー状に表示するデバッグ関数
 void print_ast(ASTNode* node, int depth) {
 	if (!node) return;
@@ -262,6 +271,9 @@ void print_ast(ASTNode* node, int depth) {
 		case AST_CATCH_BLOCK:
 			printf("CATCH_BLOCK(type:%d, class:%s, var:%s)\n", node->catch_type, node->catch_class_name ? node->catch_class_name : "NULL", node->var_name ? node->var_name : "NULL");
 			break;
+		case AST_METHOD_CALL:
+			printf("METHOD_CALL(%s.%s)\n", node->var_name, node->str_val);
+			break;
 	}
 	
 	// 子ノードの再帰表示
@@ -291,7 +303,7 @@ void print_ast(ASTNode* node, int depth) {
 	} else if (node->type == AST_FUNC_DECL) {
 		if (node->left) print_ast(node->left, depth + 1);
 		if (node->body) print_ast(node->body, depth + 1);
-	} else if (node->type == AST_FUNC_CALL || node->type == AST_RETURN || node->type == AST_THROW || node->type == AST_UNARY_MINUS) {
+	} else if (node->type == AST_FUNC_CALL || node->type == AST_METHOD_CALL || node->type == AST_RETURN || node->type == AST_THROW || node->type == AST_UNARY_MINUS) {
 		if (node->left) print_ast(node->left, depth + 1);
 	} else if (node->type == AST_TRY) {
 		if (node->then_body) print_ast(node->then_body, depth + 1);
