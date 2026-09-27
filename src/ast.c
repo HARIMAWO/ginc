@@ -178,6 +178,23 @@ ASTNode* make_throw_node(ASTNode* expr) {
 	return node;
 }
 
+ASTNode* make_hash_decl_node(GincType val_type, char* name, GincType key_type) {
+	ASTNode* node = malloc(sizeof(ASTNode));
+	node->type = AST_HASH_DECL;
+	node->var_type = val_type;
+	node->var_name = name;
+	return node;
+}
+
+ASTNode* make_index_assign_node(char* name, ASTNode* index, ASTNode* rhs) {
+	ASTNode* node = malloc(sizeof(ASTNode));
+	node->type = AST_INDEX_ASSIGN;
+	node->var_name = name;
+	node->left = index;
+	node->right = rhs;
+	return node;
+}
+
 // ASTの構造をツリー状に表示するデバッグ関数
 void print_ast(ASTNode* node, int depth) {
 	if (!node) return;
@@ -220,6 +237,8 @@ void print_ast(ASTNode* node, int depth) {
 		case AST_TRY: printf("TRY (CATCH %s)\n", node->var_name); break;
 		case AST_TRY_CATCH: printf("TRY_CATCH(%s)\n", node->var_name); break;
 		case AST_THROW: printf("THROW\n"); break;
+		case AST_HASH_DECL: printf("HASH_DECL(%s)\n", node->var_name); break;
+		case AST_INDEX_ASSIGN: printf("INDEX_ASSIGN(%s)\n", node->var_name); break;
 	}
 	
 	// 子ノードの再帰表示
@@ -254,7 +273,7 @@ void print_ast(ASTNode* node, int depth) {
 	} else if (node->type == AST_TRY) {
 		if (node->then_body) print_ast(node->then_body, depth + 1);
 		if (node->else_body) print_ast(node->else_body, depth + 1);
-	} else if (node->type == AST_TRY_CATCH) {
+	} else if (node->type == AST_TRY_CATCH || node->type == AST_INDEX_ASSIGN) {
 		if (node->left) print_ast(node->left, depth + 1);
 		if (node->right) print_ast(node->right, depth + 1);
 	}

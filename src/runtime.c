@@ -58,3 +58,48 @@ char* ginc_str_concat(char const* const s1, char const* const s2) {
 	strcat(result, s2);
 	return result;
 }
+
+#define HASH_SIZE 128
+typedef struct HashNode { char* key; int value; struct HashNode* next; } HashNode;
+typedef struct { HashNode* buckets[HASH_SIZE]; } HashTable;
+
+unsigned long ginc_hash_func(char const* str) {
+	unsigned long hash = 5381;
+	int c;
+	while ((c = *str++)) hash = ((hash << 5) + hash) + c;
+	return hash % HASH_SIZE;
+}
+
+void* ginc_hash_create() {
+	return calloc(1, sizeof(HashTable));
+}
+
+void ginc_hash_set(void* ht_ptr, char const* key, int value) {
+	HashTable* ht = (HashTable*)ht_ptr;
+	unsigned long idx = ginc_hash_func(key);
+	HashNode* node = ht->buckets[idx];
+	while (node) {
+		if (strcmp(node->key, key) == 0) {
+			node->value = value;
+			return;
+		}
+		node = node->next;
+	}
+	node = malloc(sizeof(HashNode));
+	node->key = strdup(key);
+	node->value = value;
+	node->next = ht->buckets[idx];
+	ht->buckets[idx] = node;
+}
+
+int ginc_hash_get(void* ht_ptr, char const* key) {
+	HashTable* ht = (HashTable*)ht_ptr;
+	unsigned long idx = ginc_hash_func(key);
+	HashNode* node = ht->buckets[idx];
+	while (node) {
+		if (strcmp(node->key, key) == 0) return node->value;
+		node = node->next;
+	}
+	ginc_throw(102); // Key not found
+	return 0;
+}

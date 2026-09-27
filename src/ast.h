@@ -36,7 +36,9 @@ typedef enum {
 	AST_PARAM_DECL,
 	AST_TRY,
 	AST_TRY_CATCH,
-	AST_THROW
+	AST_THROW,
+	AST_HASH_DECL,
+	AST_INDEX_ASSIGN
 } ASTNodeType;
 
 // 前方宣言
@@ -78,6 +80,8 @@ extern ASTNode* make_param_decl_node(GincType type, char* name);
 extern ASTNode* make_try_node(ASTNode* try_block, char* catch_var, ASTNode* catch_block);
 extern ASTNode* make_try_catch_node(ASTNode* try_body, char* catch_var, ASTNode* catch_body);
 extern ASTNode* make_throw_node(ASTNode* expr);
+extern ASTNode* make_hash_decl_node(GincType val_type, char* name, GincType key_type);
+extern ASTNode* make_index_assign_node(char* name, ASTNode* index, ASTNode* rhs);
 extern void print_ast(ASTNode* node, int depth);
 
 extern char const* current_filename;

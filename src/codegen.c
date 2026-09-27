@@ -68,6 +68,31 @@ LLVMValueRef generate_node(ASTNode* node) {
             }
         }
 
+        case AST_HASH_DECL: {
+            LLVMTypeRef ptr_type = LLVMPointerType(LLVMInt8TypeInContext(context), 0);
+            LLVMTypeRef func_type = LLVMFunctionType(ptr_type, NULL, 0, 0);
+            LLVMValueRef create_func = LLVMGetNamedFunction(module, "ginc_hash_create");
+            if (!create_func) {
+                create_func = LLVMAddFunction(module, "ginc_hash_create", func_type);
+            }
+
+            LLVMValueRef ht_ptr = LLVMBuildCall2(builder, func_type, create_func, NULL, 0, "ht");
+
+            char const* const name = node->var_name;
+            if (local_count > 0) {
+                LLVMValueRef alloca_inst = LLVMBuildAlloca(builder, ptr_type, name);
+                local_names[local_count] = strdup(name);
+                local_vars[local_count] = alloca_inst;
+                local_count++;
+                LLVMBuildStore(builder, ht_ptr, alloca_inst);
+            } else {
+                LLVMValueRef var = LLVMAddGlobal(module, ptr_type, name);
+                LLVMSetInitializer(var, LLVMConstNull(ptr_type));
+                LLVMBuildStore(builder, ht_ptr, var);
+            }
+            return ht_ptr;
+        }
+
         case AST_ARRAY_DECL: {
             char const* const array_name = node->var_name;
             if (LLVMGetNamedGlobal(module, array_name)) {
@@ -99,46 +124,69 @@ LLVMValueRef generate_node(ASTNode* node) {
         }
 
         case AST_ARRAY_ACCESS: {
-            char const* const array_name = node->var_name;
-            LLVMValueRef array_var = LLVMGetNamedGlobal(module, array_name);
+            LLVMValueRef idx_val = generate_node(node->left);
+            if (!idx_val) return NULL;
+
+            char const* const var_name = node->var_name;
+
+            if (LLVMGetTypeKind(LLVMTypeOf(idx_val)) == LLVMPointerTypeKind) {
+                // ハッシュアクセス
+                LLVMValueRef ht_var = NULL;
+                for (int i = local_count - 1; i >= 1; i--) {
+                    if (local_names[i] && strcmp(local_names[i], var_name) == 0) {
+                        ht_var = local_vars[i]; break;
+                    }
+                }
+                if (!ht_var) ht_var = LLVMGetNamedGlobal(module, var_name);
+                if (!ht_var) {
+                    fprintf(stderr, "Ga! (Codegen Error): Unknown variable '%s'\n", var_name);
+                    return NULL;
+                }
+
+                LLVMTypeRef ptr_type = LLVMPointerType(LLVMInt8TypeInContext(context), 0);
+                LLVMValueRef ht_ptr = LLVMBuildLoad2(builder, ptr_type, ht_var, var_name);
+
+                LLVMTypeRef param_types[] = { ptr_type, ptr_type };
+                LLVMTypeRef func_type = LLVMFunctionType(LLVMInt32TypeInContext(context), param_types, 2, 0);
+                LLVMValueRef get_func = LLVMGetNamedFunction(module, "ginc_hash_get");
+                if (!get_func) {
+                    get_func = LLVMAddFunction(module, "ginc_hash_get", func_type);
+                }
+
+                LLVMValueRef args[] = { ht_ptr, idx_val };
+                return LLVMBuildCall2(builder, func_type, get_func, args, 2, "hashval");
+            }
+
+            // 配列アクセス
+            LLVMValueRef array_var = LLVMGetNamedGlobal(module, var_name);
             if (!array_var) {
-                fprintf(stderr, "Ga! (Codegen Error): Undeclared array '%s'\n", array_name);
+                fprintf(stderr, "Ga! (Codegen Error): Undeclared array '%s'\n", var_name);
                 return NULL;
             }
 
             LLVMTypeRef array_type = LLVMGlobalGetValueType(array_var);
-            LLVMValueRef idx_val = generate_node(node->left);
-            if (!idx_val) return NULL;
-
-            // 境界チェック (Bounds Checking)
             unsigned int const array_len = LLVMGetArrayLength(array_type);
             LLVMValueRef len_val = LLVMConstInt(LLVMInt32TypeInContext(context), array_len, 0);
 
-            // 符号なし比較 UGE (unsigned greater than or equal) により、負数(2の補数)と上限オーバーの両方を判定
             LLVMValueRef is_oob = LLVMBuildICmp(builder, LLVMIntUGE, idx_val, len_val, "is_oob");
-
             LLVMValueRef parent_func = LLVMGetBasicBlockParent(LLVMGetInsertBlock(builder));
             LLVMBasicBlockRef oob_bb = LLVMAppendBasicBlockInContext(context, parent_func, "array_oob");
             LLVMBasicBlockRef inbounds_bb = LLVMAppendBasicBlockInContext(context, parent_func, "array_inbounds");
 
             LLVMBuildCondBr(builder, is_oob, oob_bb, inbounds_bb);
 
-            // 範囲外 (Out of Bounds) ブロック
             LLVMPositionBuilderAtEnd(builder, oob_bb);
             LLVMTypeRef param_types[] = { LLVMInt32TypeInContext(context) };
             LLVMTypeRef throw_func_type = LLVMFunctionType(LLVMVoidTypeInContext(context), param_types, 1, 0);
-
             LLVMValueRef throw_func = LLVMGetNamedFunction(module, "ginc_throw");
             if (!throw_func) {
                 throw_func = LLVMAddFunction(module, "ginc_throw", throw_func_type);
             }
-
             LLVMValueRef err_code = LLVMConstInt(LLVMInt32TypeInContext(context), 101, 0);
             LLVMValueRef args[] = { err_code };
             LLVMBuildCall2(builder, throw_func_type, throw_func, args, 1, "");
             LLVMBuildUnreachable(builder);
 
-            // 正常範囲内ブロック
             LLVMPositionBuilderAtEnd(builder, inbounds_bb);
             LLVMValueRef indices[] = {
                 LLVMConstInt(LLVMInt32TypeInContext(context), 0, 0),
@@ -146,7 +194,60 @@ LLVMValueRef generate_node(ASTNode* node) {
             };
             LLVMValueRef gep = LLVMBuildGEP2(builder, array_type, array_var, indices, 2, "arrayidx");
             LLVMTypeRef elem_type = LLVMGetElementType(array_type);
-            return LLVMBuildLoad2(builder, elem_type, gep, array_name);
+            return LLVMBuildLoad2(builder, elem_type, gep, var_name);
+        }
+
+        case AST_INDEX_ASSIGN: {
+            LLVMValueRef idx_val = generate_node(node->left);
+            LLVMValueRef rhs_val = generate_node(node->right);
+            if (!idx_val || !rhs_val) return NULL;
+
+            char const* const var_name = node->var_name;
+
+            if (LLVMGetTypeKind(LLVMTypeOf(idx_val)) == LLVMPointerTypeKind) {
+                // ハッシュキー代入
+                LLVMValueRef ht_var = NULL;
+                for (int i = local_count - 1; i >= 1; i--) {
+                    if (local_names[i] && strcmp(local_names[i], var_name) == 0) {
+                        ht_var = local_vars[i]; break;
+                    }
+                }
+                if (!ht_var) ht_var = LLVMGetNamedGlobal(module, var_name);
+                if (!ht_var) {
+                    fprintf(stderr, "Ga! (Codegen Error): Unknown variable '%s'\n", var_name);
+                    return NULL;
+                }
+
+                LLVMTypeRef ptr_type = LLVMPointerType(LLVMInt8TypeInContext(context), 0);
+                LLVMValueRef ht_ptr = LLVMBuildLoad2(builder, ptr_type, ht_var, var_name);
+
+                LLVMTypeRef param_types[] = { ptr_type, ptr_type, LLVMInt32TypeInContext(context) };
+                LLVMTypeRef func_type = LLVMFunctionType(LLVMVoidTypeInContext(context), param_types, 3, 0);
+                LLVMValueRef set_func = LLVMGetNamedFunction(module, "ginc_hash_set");
+                if (!set_func) {
+                    set_func = LLVMAddFunction(module, "ginc_hash_set", func_type);
+                }
+
+                LLVMValueRef args[] = { ht_ptr, idx_val, rhs_val };
+                LLVMBuildCall2(builder, func_type, set_func, args, 3, "");
+                return rhs_val;
+            }
+
+            // 配列インデックス代入
+            LLVMValueRef array_var = LLVMGetNamedGlobal(module, var_name);
+            if (!array_var) {
+                fprintf(stderr, "Ga! (Codegen Error): Undeclared array '%s'\n", var_name);
+                return NULL;
+            }
+
+            LLVMTypeRef array_type = LLVMGlobalGetValueType(array_var);
+            LLVMValueRef indices[] = {
+                LLVMConstInt(LLVMInt32TypeInContext(context), 0, 0),
+                idx_val
+            };
+            LLVMValueRef gep = LLVMBuildGEP2(builder, array_type, array_var, indices, 2, "arrayidx");
+            LLVMBuildStore(builder, rhs_val, gep);
+            return rhs_val;
         }
 
         case AST_ASSIGN: {
@@ -651,6 +752,15 @@ void generate_code(ASTNode* root) {
 
     int _setjmp(void* env);
     LLVMAddSymbol("_setjmp", (void*)_setjmp);
+
+    void* ginc_hash_create(void);
+    LLVMAddSymbol("ginc_hash_create", (void*)ginc_hash_create);
+
+    void ginc_hash_set(void* ht, char const* key, int val);
+    LLVMAddSymbol("ginc_hash_set", (void*)ginc_hash_set);
+
+    int ginc_hash_get(void* ht, char const* key);
+    LLVMAddSymbol("ginc_hash_get", (void*)ginc_hash_get);
 
     LLVMExecutionEngineRef engine;
     LLVMLinkInMCJIT();
