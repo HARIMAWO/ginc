@@ -153,6 +153,14 @@ ASTNode* make_return_node(ASTNode* expr) {
 	return node;
 }
 
+ASTNode* make_return_void_node(void) {
+	ASTNode* node = malloc(sizeof(ASTNode));
+	node->type = AST_RETURN_VOID;
+	node->left = NULL;
+	node->right = NULL;
+	return node;
+}
+
 ASTNode* make_param_decl_node(GincType type, char* name) {
 	ASTNode* node = malloc(sizeof(ASTNode));
 	node->type = AST_PARAM_DECL;
@@ -278,6 +286,7 @@ void print_ast(ASTNode* node, int depth) {
 		case AST_FUNC_DECL: printf("FUNC_DECL(%s)\n", node->var_name); break;
 		case AST_FUNC_CALL: printf("FUNC_CALL(%s)\n", node->var_name); break;
 		case AST_RETURN: printf("RETURN\n"); break;
+		case AST_RETURN_VOID: printf("RETURN_VOID\n"); break;
 		case AST_PARAM_DECL: printf("PARAM_DECL(%s)\n", node->var_name); break;
 		case AST_TRY: printf("TRY (CATCH %s)\n", node->var_name); break;
 		case AST_TRY_CATCH: printf("TRY_CATCH(%s)\n", node->var_name ? node->var_name : ""); break;

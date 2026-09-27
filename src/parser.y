@@ -21,7 +21,7 @@ static int current_access = 0;
 %token <num> T_NUM
 %token <float_val> T_FLOAT_LITERAL
 %token <str> T_IDENT T_STR T_STRING T_REGEX
-%token T_INT_TYPE T_STR_TYPE T_VAR_TYPE T_DOUBLE_TYPE T_ASSIGN T_PLUS T_MINUS T_STAR T_SLASH T_SEMI T_PRINT T_LPAREN T_RPAREN T_IF T_ELSE T_WHILE T_LBRACE T_RBRACE T_EQ T_LT T_MATCH T_LBRACKET T_RBRACKET T_COMMA T_RETURN T_TRY T_CATCH T_THROW T_FINALLY T_DOT T_CLASS T_STRUCT T_PUBLIC T_PRIVATE T_COLON T_TRUE T_FALSE T_NULL
+%token T_INT_TYPE T_STR_TYPE T_VAR_TYPE T_DOUBLE_TYPE T_ASSIGN T_PLUS T_MINUS T_STAR T_SLASH T_SEMI T_PRINT T_LPAREN T_RPAREN T_IF T_ELSE T_WHILE T_LBRACE T_RBRACE T_EQ T_LT T_MATCH T_LBRACKET T_RBRACKET T_COMMA T_RETURN T_TRY T_CATCH T_THROW T_FINALLY T_DOT T_CLASS T_STRUCT T_PUBLIC T_PRIVATE T_COLON T_TRUE T_FALSE T_NULL T_VOID T_CHAR T_FILE
 
 %type <ast> stmt_list stmt expr expr_list param_list param_decl member_decl member_list class_def class_member class_item class_member_list finally_clause func_body catch_block catch_list
 
@@ -52,10 +52,14 @@ param_decl:
   | T_STR_TYPE T_IDENT { $$ = make_param_decl_node(TYPE_STR, $2); }
   | T_VAR_TYPE T_IDENT { $$ = make_param_decl_node(TYPE_VAR, $2); }
   | T_DOUBLE_TYPE T_IDENT { $$ = make_param_decl_node(TYPE_DOUBLE, $2); }
+  | T_CHAR T_STAR T_IDENT T_LBRACKET T_RBRACKET { $$ = make_param_decl_node(TYPE_VAR, $3); }
+  | T_CHAR T_STAR T_IDENT { $$ = make_param_decl_node(TYPE_STR, $3); }
+  | T_FILE T_STAR T_IDENT { $$ = make_param_decl_node(TYPE_FILE, $3); }
 ;
 
 param_list:
     /* empty */ { $$ = NULL; }
+    | T_VOID { $$ = NULL; }
     | param_decl { $$ = make_expr_list_node($1, NULL); }
     | param_decl T_COMMA param_list { $$ = make_expr_list_node($1, $3); }
     ;
@@ -162,8 +166,14 @@ stmt:
     | T_DOUBLE_TYPE T_IDENT T_LPAREN param_list T_RPAREN func_body {
         $$ = make_func_decl_node(TYPE_DOUBLE, $2, $4, $6);
     }
+    | T_VOID T_IDENT T_LPAREN param_list T_RPAREN func_body {
+        $$ = make_func_decl_node(TYPE_VOID, $2, $4, $6);
+    }
     | T_RETURN expr T_SEMI {
         $$ = make_return_node($2);
+    }
+    | T_RETURN T_SEMI {
+        $$ = make_return_void_node();
     }
     | T_TRY T_LBRACE stmt_list T_RBRACE catch_list finally_clause {
         $$ = make_try_catch_node($3, $5, $6);
@@ -212,6 +222,12 @@ stmt:
     }
     | T_DOUBLE_TYPE T_IDENT T_ASSIGN expr T_SEMI {
         $$ = make_vardecl_node(TYPE_DOUBLE, $2, $4);
+    }
+    | T_FILE T_STAR T_IDENT T_ASSIGN expr T_SEMI {
+        $$ = make_vardecl_node(TYPE_FILE, $3, $5);
+    }
+    | T_FILE T_STAR T_IDENT T_SEMI {
+        $$ = make_vardecl_node(TYPE_FILE, $3, NULL);
     }
     | T_IDENT T_ASSIGN expr T_SEMI {
         $$ = make_binop_node(AST_ASSIGN, make_var_node($1), $3);

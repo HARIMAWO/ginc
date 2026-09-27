@@ -141,10 +141,9 @@ LLVMValueRef generate_node(ASTNode* node) {
         }
 
         case AST_VARDECL: {
-            LLVMValueRef init_val = generate_node(node->right);
-            if (!init_val) return NULL;
+            LLVMValueRef init_val = node->right ? generate_node(node->right) : NULL;
 
-            if (LLVMGetTypeKind(LLVMTypeOf(init_val)) == LLVMPointerTypeKind && !LLVMIsAFunction(init_val)) {
+            if (init_val && LLVMGetTypeKind(LLVMTypeOf(init_val)) == LLVMPointerTypeKind && !LLVMIsAFunction(init_val) && node->var_type == TYPE_INT) {
                 LLVMTypeRef ptr_type = LLVMPointerType(LLVMInt8TypeInContext(context), 0);
                 LLVMTypeRef param_types[] = { ptr_type };
                 LLVMTypeRef unwrap_type = LLVMFunctionType(LLVMInt32TypeInContext(context), param_types, 1, 0);
@@ -156,9 +155,18 @@ LLVMValueRef generate_node(ASTNode* node) {
                 init_val = LLVMBuildCall2(builder, unwrap_type, unwrap_func, args, 1, "unwrapped");
             }
 
-            LLVMTypeRef var_llvm_type = (node->var_type == TYPE_DOUBLE)
-                ? LLVMDoubleTypeInContext(context)
-                : LLVMTypeOf(init_val);
+            LLVMTypeRef var_llvm_type;
+            if (node->var_type == TYPE_DOUBLE) {
+                var_llvm_type = LLVMDoubleTypeInContext(context);
+            } else if (node->var_type == TYPE_FILE || node->var_type == TYPE_STR || node->var_type == TYPE_VAR) {
+                var_llvm_type = LLVMPointerType(LLVMInt8TypeInContext(context), 0);
+            } else {
+                var_llvm_type = init_val ? LLVMTypeOf(init_val) : LLVMInt32TypeInContext(context);
+            }
+
+            if (!init_val) {
+                init_val = LLVMConstNull(var_llvm_type);
+            }
 
             if (local_count > 0) { // 関数内のローカル変数
                 LLVMValueRef alloca_inst = LLVMBuildAlloca(builder, var_llvm_type, node->var_name);
@@ -1059,6 +1067,10 @@ LLVMValueRef generate_node(ASTNode* node) {
             return LLVMBuildRet(builder, ret_val);
         }
 
+        case AST_RETURN_VOID: {
+            return LLVMBuildRetVoid(builder);
+        }
+
         case AST_FUNC_CALL: {
             int arg_count = 0;
             ASTNode* arg_curr = node->left;
@@ -1075,7 +1087,7 @@ LLVMValueRef generate_node(ASTNode* node) {
                     arg_curr = node->left;
                     for (int p = 0; p < arg_count; p++) {
                         int expected_type = func_meta[i].param_types[p];
-                        if (expected_type != TYPE_VAR) {
+                        if (expected_type != TYPE_VAR && expected_type != TYPE_FILE) {
                             int actual_node_type = arg_curr->left->type;
                             int is_type_mismatch = 0;
 
@@ -1113,7 +1125,9 @@ LLVMValueRef generate_node(ASTNode* node) {
                     curr_arg = curr_arg->right; i++;
                 }
             }
-            LLVMValueRef call_res = LLVMBuildCall2(builder, func_type, func, args, arg_count, "calltmp");
+            LLVMTypeRef ret_type = LLVMGetReturnType(func_type);
+            char const* const call_name = (LLVMGetTypeKind(ret_type) == LLVMVoidTypeKind) ? "" : "calltmp";
+            LLVMValueRef call_res = LLVMBuildCall2(builder, func_type, func, args, arg_count, call_name);
             if (args) free(args);
             return call_res;
         }
@@ -1146,6 +1160,8 @@ LLVMValueRef generate_node(ASTNode* node) {
                 for (int i = 0; i < param_count; i++) {
                     if (cp->left->var_type == TYPE_INT) {
                         param_types[i] = LLVMInt32TypeInContext(context);
+                    } else if (cp->left->var_type == TYPE_DOUBLE) {
+                        param_types[i] = LLVMDoubleTypeInContext(context);
                     } else {
                         param_types[i] = LLVMPointerType(LLVMInt8TypeInContext(context), 0);
                     }
@@ -1153,7 +1169,18 @@ LLVMValueRef generate_node(ASTNode* node) {
                 }
             }
 
-            LLVMTypeRef func_type = LLVMFunctionType(LLVMInt32TypeInContext(context), param_types, param_count, 0);
+            LLVMTypeRef ret_llvm_type;
+            if (node->var_type == TYPE_VOID) {
+                ret_llvm_type = LLVMVoidTypeInContext(context);
+            } else if (node->var_type == TYPE_DOUBLE) {
+                ret_llvm_type = LLVMDoubleTypeInContext(context);
+            } else if (node->var_type == TYPE_STR || node->var_type == TYPE_FILE || node->var_type == TYPE_VAR) {
+                ret_llvm_type = LLVMPointerType(LLVMInt8TypeInContext(context), 0);
+            } else {
+                ret_llvm_type = LLVMInt32TypeInContext(context);
+            }
+
+            LLVMTypeRef func_type = LLVMFunctionType(ret_llvm_type, param_types, param_count, 0);
             LLVMValueRef func = LLVMAddFunction(module, node->var_name, func_type);
 
             LLVMBasicBlockRef old_bb = LLVMGetInsertBlock(builder);
@@ -1190,7 +1217,15 @@ LLVMValueRef generate_node(ASTNode* node) {
 
             // ターミネータ(return等)が無ければダミーのreturnを追加して検証エラーを防ぐ
             if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(builder))) {
-                LLVMBuildRet(builder, LLVMConstInt(LLVMInt32TypeInContext(context), 0, 0));
+                if (node->var_type == TYPE_VOID) {
+                    LLVMBuildRetVoid(builder);
+                } else if (node->var_type == TYPE_DOUBLE) {
+                    LLVMBuildRet(builder, LLVMConstReal(LLVMDoubleTypeInContext(context), 0.0));
+                } else if (node->var_type == TYPE_STR || node->var_type == TYPE_FILE || node->var_type == TYPE_VAR) {
+                    LLVMBuildRet(builder, LLVMConstNull(LLVMPointerType(LLVMInt8TypeInContext(context), 0)));
+                } else {
+                    LLVMBuildRet(builder, LLVMConstInt(LLVMInt32TypeInContext(context), 0, 0));
+                }
             }
 
             local_count = old_local_count;
@@ -1208,7 +1243,7 @@ void generate_code(ASTNode* root) {
     builder = LLVMCreateBuilderInContext(context);
 
     LLVMTypeRef main_func_type = LLVMFunctionType(LLVMInt32TypeInContext(context), NULL, 0, 0);
-    LLVMValueRef main_func = LLVMAddFunction(module, "main", main_func_type);
+    LLVMValueRef main_func = LLVMAddFunction(module, "__ginc_main", main_func_type);
     
     LLVMBasicBlockRef entry = LLVMAppendBasicBlockInContext(context, main_func, "entry");
     LLVMPositionBuilderAtEnd(builder, entry);
@@ -1314,9 +1349,9 @@ void generate_code(ASTNode* root) {
         return;
     }
 
-    uint64_t func_addr = LLVMGetFunctionAddress(engine, "main");
+    uint64_t func_addr = LLVMGetFunctionAddress(engine, "__ginc_main");
     if (func_addr == 0) {
-        fprintf(stderr, "Ga! (JIT Error): 'main' function address not found.\n");
+        fprintf(stderr, "Ga! (JIT Error): '__ginc_main' function address not found.\n");
         return;
     }
 

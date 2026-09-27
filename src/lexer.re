@@ -83,6 +83,9 @@ int yylex() {
         "int" { update_location(tok, cursor); return T_INT_TYPE; }
         "double" { update_location(tok, cursor); return T_DOUBLE_TYPE; }
         "str" { update_location(tok, cursor); return T_STR_TYPE; }
+        "void" { update_location(tok, cursor); return T_VOID; }
+        "char" { update_location(tok, cursor); return T_CHAR; }
+        "FILE" { update_location(tok, cursor); return T_FILE; }
         "class" { update_location(tok, cursor); return T_CLASS; }
         "struct" { update_location(tok, cursor); return T_STRUCT; }
         "public" { update_location(tok, cursor); return T_PUBLIC; }

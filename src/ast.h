@@ -5,7 +5,9 @@ typedef enum {
 	TYPE_INT,
 	TYPE_STR,
 	TYPE_VAR,
-	TYPE_DOUBLE
+	TYPE_DOUBLE,
+	TYPE_VOID,
+	TYPE_FILE
 } GincType;
 
 typedef enum {
@@ -37,6 +39,7 @@ typedef enum {
 	AST_FUNC_DECL,
 	AST_FUNC_CALL,
 	AST_RETURN,
+	AST_RETURN_VOID,
 	AST_PARAM_DECL,
 	AST_TRY,
 	AST_TRY_CATCH,
@@ -91,6 +94,7 @@ extern ASTNode* make_expr_list_node(ASTNode* expr, ASTNode* next);
 extern ASTNode* make_func_decl_node(GincType ret_type, char* name, ASTNode* params, ASTNode* body);
 extern ASTNode* make_func_call_node(char* name, ASTNode* args);
 extern ASTNode* make_return_node(ASTNode* expr);
+extern ASTNode* make_return_void_node(void);
 extern ASTNode* make_param_decl_node(GincType type, char* name);
 extern ASTNode* make_try_node(ASTNode* try_block, char* catch_var, ASTNode* catch_block);
 extern ASTNode* make_catch_block_node(GincType type, char* class_name, char* var_name, ASTNode* body);
