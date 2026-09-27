@@ -163,12 +163,21 @@ ASTNode* make_try_node(ASTNode* try_block, char* catch_var, ASTNode* catch_block
 	return node;
 }
 
-ASTNode* make_try_catch_node(ASTNode* try_body, char* catch_var, ASTNode* catch_body, ASTNode* finally_body) {
+ASTNode* make_catch_block_node(GincType type, char* class_name, char* var_name, ASTNode* body) {
+	ASTNode* node = malloc(sizeof(ASTNode));
+	node->type = AST_CATCH_BLOCK;
+	node->catch_type = type;
+	node->catch_class_name = class_name ? strdup(class_name) : NULL;
+	node->var_name = var_name ? strdup(var_name) : NULL;
+	node->left = body;
+	return node;
+}
+
+ASTNode* make_try_catch_node(ASTNode* try_body, ASTNode* catch_blocks, ASTNode* finally_body) {
 	ASTNode* node = malloc(sizeof(ASTNode));
 	node->type = AST_TRY_CATCH;
-	node->var_name = catch_var ? strdup(catch_var) : NULL;
 	node->left = try_body;
-	node->right = catch_body;
+	node->right = catch_blocks;
 	node->finally_body = finally_body;
 	return node;
 }
@@ -250,6 +259,9 @@ void print_ast(ASTNode* node, int depth) {
 		case AST_HASH_DECL: printf("HASH_DECL(%s)\n", node->var_name); break;
 		case AST_INDEX_ASSIGN: printf("INDEX_ASSIGN(%s)\n", node->var_name); break;
 		case AST_CLASS_DEF: printf("CLASS_DEF(%s)\n", node->var_name); break;
+		case AST_CATCH_BLOCK:
+			printf("CATCH_BLOCK(type:%d, class:%s, var:%s)\n", node->catch_type, node->catch_class_name ? node->catch_class_name : "NULL", node->var_name ? node->var_name : "NULL");
+			break;
 	}
 	
 	// 子ノードの再帰表示
@@ -288,7 +300,7 @@ void print_ast(ASTNode* node, int depth) {
 		if (node->left) print_ast(node->left, depth + 1);
 		if (node->right) print_ast(node->right, depth + 1);
 		if (node->finally_body) print_ast(node->finally_body, depth + 1);
-	} else if (node->type == AST_CLASS_DEF) {
+	} else if (node->type == AST_CLASS_DEF || node->type == AST_CATCH_BLOCK) {
 		if (node->left) print_ast(node->left, depth + 1);
 	}
 }

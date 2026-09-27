@@ -40,7 +40,8 @@ typedef enum {
 	AST_THROW,
 	AST_HASH_DECL,
 	AST_INDEX_ASSIGN,
-	AST_CLASS_DEF
+	AST_CLASS_DEF,
+	AST_CATCH_BLOCK
 } ASTNodeType;
 
 // 前方宣言
@@ -59,6 +60,8 @@ struct ASTNode {
 	ASTNode* else_body;// else節
 	ASTNode* body;     // 関数本体用
 	ASTNode* finally_body; // finally節
+	GincType catch_type;   // catchブロックの型用
+	char* catch_class_name; // Exceptionなどのクラス名用
 };
 
 extern ASTNode* make_num_node(int val);
@@ -81,7 +84,8 @@ extern ASTNode* make_func_call_node(char* name, ASTNode* args);
 extern ASTNode* make_return_node(ASTNode* expr);
 extern ASTNode* make_param_decl_node(GincType type, char* name);
 extern ASTNode* make_try_node(ASTNode* try_block, char* catch_var, ASTNode* catch_block);
-extern ASTNode* make_try_catch_node(ASTNode* try_body, char* catch_var, ASTNode* catch_body, ASTNode* finally_body);
+extern ASTNode* make_catch_block_node(GincType type, char* class_name, char* var_name, ASTNode* body);
+extern ASTNode* make_try_catch_node(ASTNode* try_body, ASTNode* catch_blocks, ASTNode* finally_body);
 extern ASTNode* make_throw_node(ASTNode* expr);
 extern ASTNode* make_hash_decl_node(GincType val_type, char* name, GincType key_type);
 extern ASTNode* make_index_assign_node(char* name, ASTNode* index, ASTNode* rhs);

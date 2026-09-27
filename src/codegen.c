@@ -669,6 +669,7 @@ LLVMValueRef generate_node(ASTNode* node) {
             // [catch_body]
             LLVMPositionBuilderAtEnd(builder, catch_bb);
             if (node->right) {
+#if 0
                 if (node->var_name) {
                     LLVMValueRef catch_var_alloca = NULL;
                     if (local_count > 0) { // 関数内
@@ -685,6 +686,7 @@ LLVMValueRef generate_node(ASTNode* node) {
                     LLVMBuildStore(builder, setjmp_res, catch_var_alloca);
                 }
                 generate_node(node->right);
+#endif
                 if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(builder))) {
                     LLVMBuildBr(builder, finally_bb);
                 }
@@ -714,6 +716,9 @@ LLVMValueRef generate_node(ASTNode* node) {
             LLVMPositionBuilderAtEnd(builder, merge_bb);
             return NULL;
         }
+
+        case AST_CATCH_BLOCK:
+            return NULL;
 
         case AST_RETURN: {
             LLVMValueRef ret_val = generate_node(node->left);

@@ -18,7 +18,7 @@ ASTNode* root_node;
 %token <str> T_IDENT T_STR T_STRING T_REGEX
 %token T_INT_TYPE T_STR_TYPE T_VAR_TYPE T_ASSIGN T_PLUS T_MINUS T_STAR T_SLASH T_SEMI T_PRINT T_LPAREN T_RPAREN T_IF T_ELSE T_WHILE T_LBRACE T_RBRACE T_EQ T_LT T_MATCH T_LBRACKET T_RBRACKET T_COMMA T_RETURN T_TRY T_CATCH T_THROW T_FINALLY T_DOT T_CLASS
 
-%type <ast> stmt_list stmt expr expr_list param_list member_decl member_list finally_clause func_body
+%type <ast> stmt_list stmt expr expr_list param_list member_decl member_list finally_clause func_body catch_block catch_list
 
 %left T_MATCH
 %left T_EQ T_LT
@@ -66,13 +66,29 @@ finally_clause:
     | T_FINALLY T_LBRACE stmt_list T_RBRACE { $$ = $3; }
     ;
 
+catch_block:
+    T_CATCH T_LPAREN T_IDENT T_IDENT T_RPAREN T_LBRACE stmt_list T_RBRACE
+    { $$ = make_catch_block_node(TYPE_VAR, $3, $4, $7); }
+    | T_CATCH T_LPAREN T_INT_TYPE T_IDENT T_RPAREN T_LBRACE stmt_list T_RBRACE
+    { $$ = make_catch_block_node(TYPE_INT, NULL, $4, $7); }
+    | T_CATCH T_LPAREN T_STR_TYPE T_IDENT T_RPAREN T_LBRACE stmt_list T_RBRACE
+    { $$ = make_catch_block_node(TYPE_STR, NULL, $4, $7); }
+    | T_CATCH T_LPAREN T_VAR_TYPE T_IDENT T_RPAREN T_LBRACE stmt_list T_RBRACE
+    { $$ = make_catch_block_node(TYPE_VAR, NULL, $4, $7); }
+    ;
+
+catch_list:
+    catch_block { $$ = make_expr_list_node($1, NULL); }
+    | catch_block catch_list { $$ = make_expr_list_node($1, $2); }
+    ;
+
 func_body:
     T_LBRACE stmt_list T_RBRACE { $$ = $2; }
-    | T_TRY T_LBRACE stmt_list T_RBRACE T_CATCH T_LPAREN T_IDENT T_RPAREN T_LBRACE stmt_list T_RBRACE finally_clause {
-        $$ = make_try_catch_node($3, $7, $10, $12);
+    | T_TRY T_LBRACE stmt_list T_RBRACE catch_list finally_clause {
+        $$ = make_try_catch_node($3, $5, $6);
     }
-    | T_TRY T_LBRACE stmt_list T_RBRACE T_FINALLY T_LBRACE stmt_list T_RBRACE {
-        $$ = make_try_catch_node($3, NULL, NULL, $7);
+    | T_TRY T_LBRACE stmt_list T_RBRACE finally_clause {
+        $$ = make_try_catch_node($3, NULL, $5);
     }
     ;
 
@@ -86,11 +102,14 @@ stmt:
     | T_RETURN expr T_SEMI {
         $$ = make_return_node($2);
     }
-    | T_TRY T_LBRACE stmt_list T_RBRACE T_CATCH T_LPAREN T_IDENT T_RPAREN T_LBRACE stmt_list T_RBRACE finally_clause {
-        $$ = make_try_catch_node($3, $7, $10, $12);
+    | T_TRY T_LBRACE stmt_list T_RBRACE catch_list finally_clause {
+        $$ = make_try_catch_node($3, $5, $6);
     }
-    | T_TRY T_LBRACE stmt_list T_RBRACE T_FINALLY T_LBRACE stmt_list T_RBRACE T_SEMI {
-        $$ = make_try_catch_node($3, NULL, NULL, $7);
+    | T_TRY T_LBRACE stmt_list T_RBRACE catch_list finally_clause T_SEMI {
+        $$ = make_try_catch_node($3, $5, $6);
+    }
+    | T_TRY T_LBRACE stmt_list T_RBRACE finally_clause T_SEMI {
+        $$ = make_try_catch_node($3, NULL, $5);
     }
     | T_TRY stmt T_CATCH T_LPAREN T_IDENT T_RPAREN stmt {
         $$ = make_try_node($2, $5, $7);
