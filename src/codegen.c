@@ -616,6 +616,9 @@ LLVMValueRef generate_node(ASTNode* node) {
             LLVMTypeRef jmpbuf_type = LLVMArrayType(LLVMInt8TypeInContext(context), 1024);
             LLVMValueRef jmpbuf_alloca = LLVMBuildAlloca(builder, jmpbuf_type, "jmpbuf");
 
+            LLVMValueRef rethrow_val = LLVMBuildAlloca(builder, i32_type, "rethrow_val");
+            LLVMBuildStore(builder, LLVMConstInt(i32_type, 0, 0), rethrow_val);
+
             LLVMTypeRef setjmp_param_types[] = { ptr_type };
             LLVMTypeRef setjmp_func_type = LLVMFunctionType(i32_type, setjmp_param_types, 1, 0);
             LLVMValueRef setjmp_func = LLVMGetNamedFunction(module, "_setjmp");
@@ -649,6 +652,7 @@ LLVMValueRef generate_node(ASTNode* node) {
             LLVMBasicBlockRef try_bb = LLVMAppendBasicBlockInContext(context, func, "try_body");
             LLVMBasicBlockRef catch_bb = LLVMAppendBasicBlockInContext(context, func, "catch_body");
             LLVMBasicBlockRef finally_bb = LLVMAppendBasicBlockInContext(context, func, "finally_body");
+            LLVMBasicBlockRef rethrow_bb = LLVMAppendBasicBlockInContext(context, func, "rethrow_bb");
             LLVMBasicBlockRef merge_bb = LLVMAppendBasicBlockInContext(context, func, "try_cont");
 
             LLVMBuildCondBr(builder, is_zero, try_bb, catch_bb);
@@ -664,23 +668,28 @@ LLVMValueRef generate_node(ASTNode* node) {
 
             // [catch_body]
             LLVMPositionBuilderAtEnd(builder, catch_bb);
-            if (node->var_name) {
-                LLVMValueRef catch_var_alloca = NULL;
-                if (local_count > 0) { // 関数内
-                    catch_var_alloca = LLVMBuildAlloca(builder, i32_type, node->var_name);
-                    if (local_count < MAX_LOCALS) {
-                        local_names[local_count] = strdup(node->var_name);
-                        local_vars[local_count] = catch_var_alloca;
-                        local_count++;
+            if (node->right) {
+                if (node->var_name) {
+                    LLVMValueRef catch_var_alloca = NULL;
+                    if (local_count > 0) { // 関数内
+                        catch_var_alloca = LLVMBuildAlloca(builder, i32_type, node->var_name);
+                        if (local_count < MAX_LOCALS) {
+                            local_names[local_count] = strdup(node->var_name);
+                            local_vars[local_count] = catch_var_alloca;
+                            local_count++;
+                        }
+                    } else { // トップレベル
+                        catch_var_alloca = LLVMAddGlobal(module, i32_type, node->var_name);
+                        LLVMSetInitializer(catch_var_alloca, LLVMConstNull(i32_type));
                     }
-                } else { // トップレベル
-                    catch_var_alloca = LLVMAddGlobal(module, i32_type, node->var_name);
-                    LLVMSetInitializer(catch_var_alloca, LLVMConstNull(i32_type));
+                    LLVMBuildStore(builder, setjmp_res, catch_var_alloca);
                 }
-                LLVMBuildStore(builder, setjmp_res, catch_var_alloca);
-            }
-            generate_node(node->right);
-            if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(builder))) {
+                generate_node(node->right);
+                if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(builder))) {
+                    LLVMBuildBr(builder, finally_bb);
+                }
+            } else {
+                LLVMBuildStore(builder, setjmp_res, rethrow_val);
                 LLVMBuildBr(builder, finally_bb);
             }
 
@@ -689,9 +698,18 @@ LLVMValueRef generate_node(ASTNode* node) {
             if (node->finally_body) {
                 generate_node(node->finally_body);
             }
+
+            LLVMValueRef rv = LLVMBuildLoad2(builder, i32_type, rethrow_val, "rv");
+            LLVMValueRef is_rethrow = LLVMBuildICmp(builder, LLVMIntNE, rv, zero, "is_rethrow");
             if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(builder))) {
-                LLVMBuildBr(builder, merge_bb);
+                LLVMBuildCondBr(builder, is_rethrow, rethrow_bb, merge_bb);
             }
+
+            // [rethrow_bb]
+            LLVMPositionBuilderAtEnd(builder, rethrow_bb);
+            LLVMValueRef throw_fn = LLVMGetNamedFunction(module, "ginc_throw");
+            LLVMBuildCall2(builder, LLVMGlobalGetValueType(throw_fn), throw_fn, &rv, 1, "");
+            LLVMBuildUnreachable(builder);
 
             LLVMPositionBuilderAtEnd(builder, merge_bb);
             return NULL;

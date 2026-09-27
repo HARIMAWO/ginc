@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "ast.h"
 
 ASTNode* make_num_node(int val) {
@@ -165,7 +166,7 @@ ASTNode* make_try_node(ASTNode* try_block, char* catch_var, ASTNode* catch_block
 ASTNode* make_try_catch_node(ASTNode* try_body, char* catch_var, ASTNode* catch_body, ASTNode* finally_body) {
 	ASTNode* node = malloc(sizeof(ASTNode));
 	node->type = AST_TRY_CATCH;
-	node->var_name = catch_var;
+	node->var_name = catch_var ? strdup(catch_var) : NULL;
 	node->left = try_body;
 	node->right = catch_body;
 	node->finally_body = finally_body;
@@ -244,7 +245,7 @@ void print_ast(ASTNode* node, int depth) {
 		case AST_RETURN: printf("RETURN\n"); break;
 		case AST_PARAM_DECL: printf("PARAM_DECL(%s)\n", node->var_name); break;
 		case AST_TRY: printf("TRY (CATCH %s)\n", node->var_name); break;
-		case AST_TRY_CATCH: printf("TRY_CATCH(%s)\n", node->var_name); break;
+		case AST_TRY_CATCH: printf("TRY_CATCH(%s)\n", node->var_name ? node->var_name : ""); break;
 		case AST_THROW: printf("THROW\n"); break;
 		case AST_HASH_DECL: printf("HASH_DECL(%s)\n", node->var_name); break;
 		case AST_INDEX_ASSIGN: printf("INDEX_ASSIGN(%s)\n", node->var_name); break;
