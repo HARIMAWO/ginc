@@ -39,6 +39,15 @@ typedef struct {
 static ClassMeta class_meta[50];
 static int class_meta_count = 0;
 
+typedef struct {
+	char* func_name;
+	int param_count;
+	int param_types[20];
+} FuncMeta;
+
+static FuncMeta func_meta[100];
+static int func_meta_count = 0;
+
 static void check_access(char const* target_class, char const* member_name) {
 	for (int i = 0; i < class_meta_count; i++) {
 		if (strcmp(class_meta[i].class_name, target_class) == 0) {
@@ -1051,6 +1060,41 @@ LLVMValueRef generate_node(ASTNode* node) {
         }
 
         case AST_FUNC_CALL: {
+            int arg_count = 0;
+            ASTNode* arg_curr = node->left;
+            while (arg_curr) { arg_count++; arg_curr = arg_curr->right; }
+
+            for (int i = 0; i < func_meta_count; i++) {
+                if (strcmp(func_meta[i].func_name, node->var_name) == 0) {
+                    if (func_meta[i].param_count != arg_count) {
+                        fprintf(stderr, "Ga! (Compile Error): Function '%s' expects %d arguments, but got %d\n", 
+                                node->var_name, func_meta[i].param_count, arg_count);
+                        exit(1);
+                    }
+
+                    arg_curr = node->left;
+                    for (int p = 0; p < arg_count; p++) {
+                        int expected_type = func_meta[i].param_types[p];
+                        if (expected_type != TYPE_VAR) {
+                            int actual_node_type = arg_curr->left->type;
+                            int is_type_mismatch = 0;
+
+                            if (expected_type == TYPE_INT && actual_node_type != AST_NUM) is_type_mismatch = 1;
+                            if (expected_type == TYPE_STR && actual_node_type != AST_STR && actual_node_type != AST_STRING) is_type_mismatch = 1;
+                            if (expected_type == TYPE_DOUBLE && actual_node_type != AST_FLOAT) is_type_mismatch = 1;
+
+                            if (is_type_mismatch && actual_node_type != AST_VAR && actual_node_type != AST_ARRAY_ACCESS && actual_node_type != AST_METHOD_CALL && actual_node_type != AST_FUNC_CALL) {
+                                fprintf(stderr, "Ga! (Compile Error): Type mismatch for argument %d of function '%s'\n", 
+                                        p + 1, node->var_name);
+                                exit(1);
+                            }
+                        }
+                        arg_curr = arg_curr->right;
+                    }
+                    break;
+                }
+            }
+
             LLVMValueRef func = LLVMGetNamedFunction(module, node->var_name);
             if (!func) {
                 fprintf(stderr, "Ga! (Codegen Error): Unknown function '%s'\n", node->var_name);
@@ -1058,15 +1102,11 @@ LLVMValueRef generate_node(ASTNode* node) {
             }
             // ★超重要: Opaque Pointer環境ではLLVMGlobalGetValueTypeで関数の実際の型を取得する
             LLVMTypeRef func_type = LLVMGlobalGetValueType(func);
-            
-            int arg_count = 0;
-            ASTNode* curr_arg = node->left;
-            while (curr_arg) { arg_count++; curr_arg = curr_arg->right; }
-            
+
             LLVMValueRef* args = NULL;
             if (arg_count > 0) {
                 args = malloc(sizeof(LLVMValueRef) * arg_count);
-                curr_arg = node->left;
+                ASTNode* curr_arg = node->left;
                 int i = 0;
                 while (curr_arg) {
                     args[i] = generate_node(curr_arg->left);
@@ -1088,7 +1128,17 @@ LLVMValueRef generate_node(ASTNode* node) {
             int param_count = 0;
             ASTNode* curr_param = node->left; // params (AST_EXPR_LIST)
             while (curr_param) { param_count++; curr_param = curr_param->right; }
-            
+
+            FuncMeta meta;
+            meta.func_name = strdup(node->str_val ? node->str_val : node->var_name);
+            meta.param_count = param_count;
+            ASTNode* cp_meta = node->left;
+            for (int i = 0; i < param_count; i++) {
+                meta.param_types[i] = cp_meta->left->var_type;
+                cp_meta = cp_meta->right;
+            }
+            func_meta[func_meta_count++] = meta;
+
             LLVMTypeRef* param_types = NULL;
             if (param_count > 0) {
                 param_types = malloc(sizeof(LLVMTypeRef) * param_count);
@@ -1102,17 +1152,17 @@ LLVMValueRef generate_node(ASTNode* node) {
                     cp = cp->right;
                 }
             }
-            
+
             LLVMTypeRef func_type = LLVMFunctionType(LLVMInt32TypeInContext(context), param_types, param_count, 0);
             LLVMValueRef func = LLVMAddFunction(module, node->var_name, func_type);
-            
+
             LLVMBasicBlockRef old_bb = LLVMGetInsertBlock(builder);
             LLVMBasicBlockRef entry = LLVMAppendBasicBlockInContext(context, func, "entry");
             LLVMPositionBuilderAtEnd(builder, entry);
-            
+
             int old_local_count = local_count;
             local_count = 1; // ローカル変数は1から開始
-            
+
             curr_param = node->left;
             int p_idx = 0;
             while (curr_param) {
@@ -1127,22 +1177,22 @@ LLVMValueRef generate_node(ASTNode* node) {
                     local_classes[local_count] = NULL;
                 }
                 local_count++;
-                
+
                 LLVMValueRef arg_val = LLVMGetParam(func, p_idx);
                 LLVMBuildStore(builder, arg_val, alloca_inst);
-                
+
                 curr_param = curr_param->right; p_idx++;
             }
 
             if (param_types) free(param_types);
-            
+
             generate_node(node->body); // 関数本体の評価
-            
+
             // ターミネータ(return等)が無ければダミーのreturnを追加して検証エラーを防ぐ
             if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(builder))) {
                 LLVMBuildRet(builder, LLVMConstInt(LLVMInt32TypeInContext(context), 0, 0));
             }
-            
+
             local_count = old_local_count;
             strcpy(current_codegen_class, old_class);
             LLVMPositionBuilderAtEnd(builder, old_bb);
