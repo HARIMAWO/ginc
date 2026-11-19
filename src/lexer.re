@@ -41,6 +41,7 @@ int yylex() {
         FLOAT = [0-9]+ "." [0-9]+;
         IDENT = [a-zA-Z_][a-zA-Z0-9_]*;
         STR = "\"" [^"\x00\n]* "\"";
+        CHAR_LIT = "'" ("\\" [^\x00\n] | [^'\\\x00\n]) "'";
         REGEX = "/" [^/\x00\n]+ "/";
 
         * {
@@ -91,6 +92,23 @@ int yylex() {
             yylval.str = strndup(tok + 1, cursor - tok - 2);
             return T_STRING;
         }
+        CHAR_LIT {
+            update_location(tok, cursor);
+            char c = tok[1];
+            if (c == '\\') {
+                switch (tok[2]) {
+                    case 'n': c = '\n'; break;
+                    case 't': c = '\t'; break;
+                    case 'r': c = '\r'; break;
+                    case '0': c = '\0'; break;
+                    case '\\': c = '\\'; break;
+                    case '\'': c = '\''; break;
+                    default: c = tok[2]; break;
+                }
+            }
+            yylval.num = (unsigned char)c;
+            return T_NUM;
+        }
         REGEX {
             update_location(tok, cursor);
             // 前後のスラッシュを除外して複製
@@ -102,9 +120,25 @@ int yylex() {
         "false" { update_location(tok, cursor); return T_FALSE; }
         "null" { update_location(tok, cursor); return T_NULL; }
         "typedef" { update_location(tok, cursor); return T_TYPEDEF; }
+        "const" { update_location(tok, cursor); return T_CONST; }
+        "static" { update_location(tok, cursor); return T_STATIC; }
+        "extern" { update_location(tok, cursor); return T_EXTERN; }
+        "enum" { update_location(tok, cursor); return T_ENUM; }
+        "goto" { update_location(tok, cursor); return T_GOTO; }
+        "sizeof" { update_location(tok, cursor); return T_SIZEOF; }
+        "va_list" { update_location(tok, cursor); return T_VA_LIST; }
+        "va_start" { update_location(tok, cursor); return T_VA_START; }
+        "va_arg" { update_location(tok, cursor); return T_VA_ARG; }
+        "va_end" { update_location(tok, cursor); return T_VA_END; }
         "var" { update_location(tok, cursor); return T_VAR_TYPE; }
         "int" { update_location(tok, cursor); return T_INT_TYPE; }
+        "short" { update_location(tok, cursor); return T_SHORT; }
+        "long" { update_location(tok, cursor); return T_LONG; }
+        "unsigned" { update_location(tok, cursor); return T_UNSIGNED; }
+        "float" { update_location(tok, cursor); return T_FLOAT_TYPE; }
         "double" { update_location(tok, cursor); return T_DOUBLE_TYPE; }
+        "bool" { update_location(tok, cursor); return T_BOOL; }
+        "_Bool" { update_location(tok, cursor); return T_BOOL; }
         "str" { update_location(tok, cursor); return T_STR_TYPE; }
         "void" { update_location(tok, cursor); return T_VOID; }
         "char" { update_location(tok, cursor); return T_CHAR; }
@@ -125,6 +159,9 @@ int yylex() {
         "do" { update_location(tok, cursor); return T_DO; }
         "break" { update_location(tok, cursor); return T_BREAK; }
         "continue" { update_location(tok, cursor); return T_CONTINUE; }
+        "switch" { update_location(tok, cursor); return T_SWITCH; }
+        "case" { update_location(tok, cursor); return T_CASE; }
+        "default" { update_location(tok, cursor); return T_DEFAULT; }
         "while" { update_location(tok, cursor); return T_WHILE; }
         "for" { update_location(tok, cursor); return T_FOR; }
         "return" { update_location(tok, cursor); return T_RETURN; }
@@ -142,6 +179,16 @@ int yylex() {
         "!=" { update_location(tok, cursor); return T_NEQ; }
         "!" { update_location(tok, cursor); return T_NOT; }
         "==" { update_location(tok, cursor); return T_EQ; }
+        "+=" { update_location(tok, cursor); return T_ADD_ASSIGN; }
+        "-=" { update_location(tok, cursor); return T_SUB_ASSIGN; }
+        "*=" { update_location(tok, cursor); return T_MUL_ASSIGN; }
+        "/=" { update_location(tok, cursor); return T_DIV_ASSIGN; }
+        "%=" { update_location(tok, cursor); return T_MOD_ASSIGN; }
+        "&=" { update_location(tok, cursor); return T_AND_ASSIGN; }
+        "|=" { update_location(tok, cursor); return T_OR_ASSIGN; }
+        "^=" { update_location(tok, cursor); return T_XOR_ASSIGN; }
+        "<<=" { update_location(tok, cursor); return T_LSHIFT_ASSIGN; }
+        ">>=" { update_location(tok, cursor); return T_RSHIFT_ASSIGN; }
         "=" { update_location(tok, cursor); return T_ASSIGN; }
         ">=" { update_location(tok, cursor); return T_GE; }
         "<=" { update_location(tok, cursor); return T_LE; }
@@ -153,11 +200,15 @@ int yylex() {
         "&" { update_location(tok, cursor); return T_AMP; }
         "|" { update_location(tok, cursor); return T_BIT_OR_TOK; }
         "^" { update_location(tok, cursor); return T_XOR; }
+        "~" { update_location(tok, cursor); return T_TILDE; }
+        "?" { update_location(tok, cursor); return T_QUESTION; }
         "+" { update_location(tok, cursor); return T_PLUS; }
         "-" { update_location(tok, cursor); return T_MINUS; }
+        "->" { update_location(tok, cursor); return T_ARROW; }
         "*" { update_location(tok, cursor); return T_STAR; }
         "/" { update_location(tok, cursor); return T_SLASH; }
         "." { update_location(tok, cursor); return T_DOT; }
+        "..." { update_location(tok, cursor); return T_ELLIPSIS; }
         ";" { update_location(tok, cursor); return T_SEMI; }
         "(" { update_location(tok, cursor); return T_LPAREN; }
         ")" { update_location(tok, cursor); return T_RPAREN; }

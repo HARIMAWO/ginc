@@ -1,0 +1,27 @@
+#!/usr/bin/env ginc
+
+class Status {
+public:
+	int is_active;
+    var data;
+};
+
+class Status s;
+
+// true / false / null がリテラルとして使える！
+s.is_active = true;
+s.data = null;
+
+if (s.is_active == true) {
+    print(1111); // 出力される
+}
+
+s.is_active = false;
+if (s.is_active == false) {
+    print(2222); // 出力される
+}
+
+// null は裏側ではポインタ(0)として扱われる
+if (s.data == null) {
+    print(3333); // 出力される
+}

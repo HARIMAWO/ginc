@@ -1,0 +1,68 @@
+#!/usr/bin/env ginc
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
+
+#define CALL_2(fn, a, ...) fn(a, __VA_ARGS__)
+#define LOG_ARGS(first, ...) first, ##__VA_ARGS__
+
+int sum3(int a, int b, int c) {
+	return a + b + c;
+}
+
+int main(void) {
+	// 1. 可変長引数マクロ
+	print(CALL_2(sum3, 10, 20, 30)); // 60
+	int v = (LOG_ARGS(77));
+	print(v); // 77
+
+	// 2. <string.h>
+	char* s = "hello";
+	print(strlen(s));          // 5
+	print(strcmp(s, "hello")); // 0
+	print(strcmp(s, "world") < 0); // 1
+
+	char buf[32];
+	strcpy(buf, "ginc_std");
+	print(strlen(buf));        // 8
+	puts(buf);                 // ginc_std
+
+	char* found = strchr(buf, '_');
+	if (found != NULL) {
+		puts(found);           // _std
+	}
+
+	// 3. <stdlib.h> (malloc / free / atoi / abs)
+	int* arr = malloc(sizeof(int) * 4);
+	for (int i = 0; i < 4; i++) {
+		arr[i] = (i + 1) * 10;
+	}
+	print(arr[0]);             // 10
+	print(*(arr + 3));         // 40
+	free(arr);
+
+	print(atoi("1234"));       // 1234
+	print(abs(-99));           // 99
+
+	// 4. <math.h>
+	print(sqrt(16.0));         // 4.000000
+	print(pow(2.0, 10.0));     // 1024.000000
+	print(floor(3.9));         // 3.000000
+	print(ceil(3.1));          // 4.000000
+
+	// 5. <stdio.h> ファイルI/O
+	FILE* fp = fopen("/tmp/ginc_io_test.txt", "w");
+	fputs("file_ok\n", fp);
+	fclose(fp);
+
+	FILE* fp2 = fopen("/tmp/ginc_io_test.txt", "r");
+	char rbuf[32];
+	if (fgets(rbuf, 32, fp2) != NULL) {
+		puts(rbuf);            // file_ok
+	}
+	fclose(fp2);
+
+	return 0;
+}

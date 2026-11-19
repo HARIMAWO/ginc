@@ -1,0 +1,24 @@
+#!/usr/bin/env ginc
+
+// クラスの定義（スキーマ）
+class Exception {
+public:
+    int code;
+    str message;
+};
+
+// クラスのインスタンス化（実体はバリアントな連想配列）
+class Exception e;
+e.code = 404;
+e.message = "Not Found";
+
+print(e.code);
+print(e.message);
+
+// var型の連想配列のテスト
+var dict[str];
+dict["num"] = 100;
+dict["str"] = "Hello GINC!";
+
+print(dict["num"]);
+print(dict["str"]);

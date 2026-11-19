@@ -3,50 +3,50 @@
 #include <string.h>
 #include "ast.h"
 
-ASTNode* make_num_node(int val) {
-	ASTNode* node = malloc(sizeof(ASTNode));
+ASTNode* make_num_node(long long val) {
+	ASTNode* node = calloc(1, sizeof(ASTNode));
 	node->type = AST_NUM;
 	node->val = val;
 	return node;
 }
 
 ASTNode* make_float_node(double val) {
-	ASTNode* node = malloc(sizeof(ASTNode));
+	ASTNode* node = calloc(1, sizeof(ASTNode));
 	node->type = AST_FLOAT;
 	node->float_val = val;
 	return node;
 }
 
 ASTNode* make_str_node(char* str_val) {
-	ASTNode* node = malloc(sizeof(ASTNode));
+	ASTNode* node = calloc(1, sizeof(ASTNode));
 	node->type = AST_STR;
 	node->var_name = str_val;
 	return node;
 }
 
 ASTNode* make_string_node(char* str) {
-	ASTNode* node = malloc(sizeof(ASTNode));
+	ASTNode* node = calloc(1, sizeof(ASTNode));
 	node->type = AST_STRING;
 	node->str_val = str;
 	return node;
 }
 
 ASTNode* make_regex_node(char* pattern) {
-	ASTNode* node = malloc(sizeof(ASTNode));
+	ASTNode* node = calloc(1, sizeof(ASTNode));
 	node->type = AST_REGEX;
 	node->str_val = pattern;
 	return node;
 }
 
 ASTNode* make_var_node(char* name) {
-	ASTNode* node = malloc(sizeof(ASTNode));
+	ASTNode* node = calloc(1, sizeof(ASTNode));
 	node->type = AST_VAR;
 	node->var_name = name;
 	return node;
 }
 
 ASTNode* make_vardecl_node(GincType type, char* var_name, ASTNode* init_expr) {
-	ASTNode* node = malloc(sizeof(ASTNode));
+	ASTNode* node = calloc(1, sizeof(ASTNode));
 	node->type = AST_VARDECL;
 	node->var_type = type;
 	node->var_name = var_name;
@@ -55,7 +55,7 @@ ASTNode* make_vardecl_node(GincType type, char* var_name, ASTNode* init_expr) {
 }
 
 ASTNode* make_binop_node(ASTNodeType type, ASTNode* left, ASTNode* right) {
-	ASTNode* node = malloc(sizeof(ASTNode));
+	ASTNode* node = calloc(1, sizeof(ASTNode));
 	node->type = type;
 	node->left = left;
 	node->right = right;
@@ -63,7 +63,7 @@ ASTNode* make_binop_node(ASTNodeType type, ASTNode* left, ASTNode* right) {
 }
 
 ASTNode* make_unary_node(ASTNodeType type, ASTNode* expr) {
-	ASTNode* node = malloc(sizeof(ASTNode));
+	ASTNode* node = calloc(1, sizeof(ASTNode));
 	node->type = type;
 	node->left = expr;
 	node->right = NULL;
@@ -71,7 +71,7 @@ ASTNode* make_unary_node(ASTNodeType type, ASTNode* expr) {
 }
 
 ASTNode* make_print_node(ASTNode* arg) {
-	ASTNode* node = malloc(sizeof(ASTNode));
+	ASTNode* node = calloc(1, sizeof(ASTNode));
 	node->type = AST_PRINT;
 	node->left = arg;
 	node->right = NULL;
@@ -79,7 +79,7 @@ ASTNode* make_print_node(ASTNode* arg) {
 }
 
 ASTNode* make_if_node(ASTNode* cond, ASTNode* then_body, ASTNode* else_body) {
-	ASTNode* node = malloc(sizeof(ASTNode));
+	ASTNode* node = calloc(1, sizeof(ASTNode));
 	node->type = AST_IF;
 	node->cond = cond;
 	node->then_body = then_body;
@@ -88,7 +88,7 @@ ASTNode* make_if_node(ASTNode* cond, ASTNode* then_body, ASTNode* else_body) {
 }
 
 ASTNode* make_while_node(ASTNode* cond, ASTNode* body) {
-	ASTNode* node = malloc(sizeof(ASTNode));
+	ASTNode* node = calloc(1, sizeof(ASTNode));
 	node->type = AST_WHILE;
 	node->cond = cond;
 	node->then_body = body;
@@ -96,7 +96,7 @@ ASTNode* make_while_node(ASTNode* cond, ASTNode* body) {
 }
 
 ASTNode* make_do_while_node(ASTNode* body, ASTNode* cond) {
-	ASTNode* node = malloc(sizeof(ASTNode));
+	ASTNode* node = calloc(1, sizeof(ASTNode));
 	node->type = AST_DO_WHILE;
 	node->left = body;
 	node->right = cond;
@@ -104,7 +104,7 @@ ASTNode* make_do_while_node(ASTNode* body, ASTNode* cond) {
 }
 
 ASTNode* make_break_node(void) {
-	ASTNode* node = malloc(sizeof(ASTNode));
+	ASTNode* node = calloc(1, sizeof(ASTNode));
 	node->type = AST_BREAK;
 	node->left = NULL;
 	node->right = NULL;
@@ -112,7 +112,7 @@ ASTNode* make_break_node(void) {
 }
 
 ASTNode* make_continue_node(void) {
-	ASTNode* node = malloc(sizeof(ASTNode));
+	ASTNode* node = calloc(1, sizeof(ASTNode));
 	node->type = AST_CONTINUE;
 	node->left = NULL;
 	node->right = NULL;
@@ -120,7 +120,7 @@ ASTNode* make_continue_node(void) {
 }
 
 ASTNode* make_for_node(ASTNode* init, ASTNode* cond, ASTNode* inc, ASTNode* body) {
-	ASTNode* node = malloc(sizeof(ASTNode));
+	ASTNode* node = calloc(1, sizeof(ASTNode));
 	node->type = AST_FOR;
 	node->left = init;
 	node->cond = cond;
@@ -130,14 +130,14 @@ ASTNode* make_for_node(ASTNode* init, ASTNode* cond, ASTNode* inc, ASTNode* body
 }
 
 ASTNode* make_block_node(ASTNode* stmt_list) {
-	ASTNode* node = malloc(sizeof(ASTNode));
+	ASTNode* node = calloc(1, sizeof(ASTNode));
 	node->type = AST_BLOCK;
 	node->left = stmt_list;
 	return node;
 }
 
 ASTNode* make_array_decl_node(GincType type, char* name, int max_size, ASTNode* init_list) {
-	ASTNode* node = malloc(sizeof(ASTNode));
+	ASTNode* node = calloc(1, sizeof(ASTNode));
 	node->type = AST_ARRAY_DECL;
 	node->var_type = type;
 	node->var_name = name;
@@ -147,7 +147,7 @@ ASTNode* make_array_decl_node(GincType type, char* name, int max_size, ASTNode* 
 }
 
 ASTNode* make_array_access_node(char* name, ASTNode* index) {
-	ASTNode* node = malloc(sizeof(ASTNode));
+	ASTNode* node = calloc(1, sizeof(ASTNode));
 	node->type = AST_ARRAY_ACCESS;
 	node->var_name = name;
 	node->left = index;
@@ -155,7 +155,7 @@ ASTNode* make_array_access_node(char* name, ASTNode* index) {
 }
 
 ASTNode* make_expr_list_node(ASTNode* expr, ASTNode* next) {
-	ASTNode* node = malloc(sizeof(ASTNode));
+	ASTNode* node = calloc(1, sizeof(ASTNode));
 	node->type = AST_EXPR_LIST;
 	node->left = expr;
 	node->right = next;
@@ -163,7 +163,7 @@ ASTNode* make_expr_list_node(ASTNode* expr, ASTNode* next) {
 }
 
 ASTNode* make_func_decl_node(GincType ret_type, char* name, ASTNode* params, ASTNode* body) {
-	ASTNode* node = malloc(sizeof(ASTNode));
+	ASTNode* node = calloc(1, sizeof(ASTNode));
 	node->type = AST_FUNC_DECL;
 	node->var_type = ret_type;
 	node->var_name = name;
@@ -173,7 +173,7 @@ ASTNode* make_func_decl_node(GincType ret_type, char* name, ASTNode* params, AST
 }
 
 ASTNode* make_func_call_node(char* name, ASTNode* args) {
-	ASTNode* node = malloc(sizeof(ASTNode));
+	ASTNode* node = calloc(1, sizeof(ASTNode));
 	node->type = AST_FUNC_CALL;
 	node->var_name = name;
 	node->left = args;
@@ -181,14 +181,14 @@ ASTNode* make_func_call_node(char* name, ASTNode* args) {
 }
 
 ASTNode* make_return_node(ASTNode* expr) {
-	ASTNode* node = malloc(sizeof(ASTNode));
+	ASTNode* node = calloc(1, sizeof(ASTNode));
 	node->type = AST_RETURN;
 	node->left = expr;
 	return node;
 }
 
 ASTNode* make_return_void_node(void) {
-	ASTNode* node = malloc(sizeof(ASTNode));
+	ASTNode* node = calloc(1, sizeof(ASTNode));
 	node->type = AST_RETURN_VOID;
 	node->left = NULL;
 	node->right = NULL;
@@ -196,7 +196,7 @@ ASTNode* make_return_void_node(void) {
 }
 
 ASTNode* make_param_decl_node(GincType type, char* name) {
-	ASTNode* node = malloc(sizeof(ASTNode));
+	ASTNode* node = calloc(1, sizeof(ASTNode));
 	node->type = AST_PARAM_DECL;
 	node->var_type = type;
 	node->var_name = name;
@@ -204,7 +204,7 @@ ASTNode* make_param_decl_node(GincType type, char* name) {
 }
 
 ASTNode* make_try_node(ASTNode* try_block, char* catch_var, ASTNode* catch_block) {
-	ASTNode* node = malloc(sizeof(ASTNode));
+	ASTNode* node = calloc(1, sizeof(ASTNode));
 	node->type = AST_TRY;
 	node->then_body = try_block;
 	node->var_name = catch_var;
@@ -213,7 +213,7 @@ ASTNode* make_try_node(ASTNode* try_block, char* catch_var, ASTNode* catch_block
 }
 
 ASTNode* make_catch_block_node(GincType type, char* class_name, char* var_name, ASTNode* body) {
-	ASTNode* node = malloc(sizeof(ASTNode));
+	ASTNode* node = calloc(1, sizeof(ASTNode));
 	node->type = AST_CATCH_BLOCK;
 	node->catch_type = type;
 	node->catch_class_name = class_name ? strdup(class_name) : NULL;
@@ -223,7 +223,7 @@ ASTNode* make_catch_block_node(GincType type, char* class_name, char* var_name, 
 }
 
 ASTNode* make_try_catch_node(ASTNode* try_body, ASTNode* catch_blocks, ASTNode* finally_body) {
-	ASTNode* node = malloc(sizeof(ASTNode));
+	ASTNode* node = calloc(1, sizeof(ASTNode));
 	node->type = AST_TRY_CATCH;
 	node->left = try_body;
 	node->right = catch_blocks;
@@ -232,14 +232,14 @@ ASTNode* make_try_catch_node(ASTNode* try_body, ASTNode* catch_blocks, ASTNode* 
 }
 
 ASTNode* make_throw_node(ASTNode* expr) {
-	ASTNode* node = malloc(sizeof(ASTNode));
+	ASTNode* node = calloc(1, sizeof(ASTNode));
 	node->type = AST_THROW;
 	node->left = expr;
 	return node;
 }
 
 ASTNode* make_hash_decl_node(GincType val_type, char* name, GincType key_type) {
-	ASTNode* node = malloc(sizeof(ASTNode));
+	ASTNode* node = calloc(1, sizeof(ASTNode));
 	node->type = AST_HASH_DECL;
 	node->var_type = val_type;
 	node->var_name = name;
@@ -247,7 +247,7 @@ ASTNode* make_hash_decl_node(GincType val_type, char* name, GincType key_type) {
 }
 
 ASTNode* make_index_assign_node(char* name, ASTNode* index, ASTNode* rhs) {
-	ASTNode* node = malloc(sizeof(ASTNode));
+	ASTNode* node = calloc(1, sizeof(ASTNode));
 	node->type = AST_INDEX_ASSIGN;
 	node->var_name = name;
 	node->left = index;
@@ -256,7 +256,7 @@ ASTNode* make_index_assign_node(char* name, ASTNode* index, ASTNode* rhs) {
 }
 
 ASTNode* make_class_def_node(char* name, ASTNode* members) {
-	ASTNode* node = malloc(sizeof(ASTNode));
+	ASTNode* node = calloc(1, sizeof(ASTNode));
 	node->type = AST_CLASS_DEF;
 	node->var_name = name;
 	node->left = members;
@@ -264,7 +264,7 @@ ASTNode* make_class_def_node(char* name, ASTNode* members) {
 }
 
 ASTNode* make_class_var_decl_node(char* class_name, char* var_name) {
-	ASTNode* node = malloc(sizeof(ASTNode));
+	ASTNode* node = calloc(1, sizeof(ASTNode));
 	node->type = AST_CLASS_VAR_DECL;
 	node->str_val = class_name;
 	node->var_name = var_name;
@@ -272,7 +272,7 @@ ASTNode* make_class_var_decl_node(char* class_name, char* var_name) {
 }
 
 ASTNode* make_method_call_node(char* obj_name, char* method_name, ASTNode* args) {
-	ASTNode* node = malloc(sizeof(ASTNode));
+	ASTNode* node = calloc(1, sizeof(ASTNode));
 	node->type = AST_METHOD_CALL;
 	node->var_name = obj_name;
 	node->str_val = method_name;
@@ -283,11 +283,14 @@ ASTNode* make_method_call_node(char* obj_name, char* method_name, ASTNode* args)
 static TypeAlias* type_alias_list_head = NULL;
 
 static char const* const reserved_keywords[] = {
-	"int", "str", "var", "double", "void", "char", "FILE",
+	"int", "char", "short", "long", "unsigned", "float", "bool", "_Bool",
+	"str", "var", "double", "void", "FILE",
 	"if", "else", "while", "do", "for", "break", "continue",
+	"switch", "case", "default",
 	"return", "try", "catch", "throw", "finally",
 	"class", "struct", "public", "private", "print",
-	"true", "false", "null", "typedef", NULL
+	"true", "false", "null", "typedef", "const", "static", "extern", "enum", "goto", "sizeof",
+	"va_list", "va_start", "va_arg", "va_end", NULL
 };
 
 int is_reserved_keyword(char const* name) {
@@ -346,6 +349,18 @@ void register_type_alias(GincType base_type, char const* alias) {
 	register_type_alias_ext(base_type, alias, NULL);
 }
 
+void reset_type_aliases(void) {
+	TypeAlias* curr = type_alias_list_head;
+	while (curr) {
+		TypeAlias* next = curr->next;
+		free(curr->alias);
+		free(curr->target_type_str);
+		free(curr);
+		curr = next;
+	}
+	type_alias_list_head = NULL;
+}
+
 GincType resolve_type_alias(char const* name, int* is_found) {
 	TypeAlias* curr = type_alias_list_head;
 	while (curr) {
@@ -364,7 +379,7 @@ GincType resolve_type_alias(char const* name, int* is_found) {
 
 ASTNode* make_typedef_node(GincType base_type, char* alias) {
 	register_type_alias_ext(base_type, alias, NULL);
-	ASTNode* node = malloc(sizeof(ASTNode));
+	ASTNode* node = calloc(1, sizeof(ASTNode));
 	node->type = AST_TYPEDEF;
 	node->var_type = base_type;
 	node->var_name = alias;
@@ -373,7 +388,7 @@ ASTNode* make_typedef_node(GincType base_type, char* alias) {
 
 ASTNode* make_typedef_ext_node(GincType base_type, char* alias, char* target_str) {
 	register_type_alias_ext(base_type, alias, target_str);
-	ASTNode* node = malloc(sizeof(ASTNode));
+	ASTNode* node = calloc(1, sizeof(ASTNode));
 	node->type = AST_TYPEDEF;
 	node->var_type = base_type;
 	node->var_name = alias;
@@ -391,13 +406,202 @@ ASTNode* make_typedef_node_from_user_type(char const* user_type_name, char* new_
 	}
 }
 
+ASTNode* make_switch_node(ASTNode* expr, ASTNode* case_list) {
+	ASTNode* node = calloc(1, sizeof(ASTNode));
+	node->type = AST_SWITCH;
+	node->left = expr;
+	node->right = case_list;
+	return node;
+}
+
+ASTNode* make_case_node(ASTNode* val_expr, ASTNode* body) {
+	ASTNode* node = calloc(1, sizeof(ASTNode));
+	node->type = AST_CASE;
+	node->left = val_expr;
+	node->right = body;
+	return node;
+}
+
+ASTNode* make_default_node(ASTNode* body) {
+	ASTNode* node = calloc(1, sizeof(ASTNode));
+	node->type = AST_DEFAULT;
+	node->left = body;
+	return node;
+}
+
+ASTNode* make_ternary_node(ASTNode* cond, ASTNode* then_expr, ASTNode* else_expr) {
+	ASTNode* node = calloc(1, sizeof(ASTNode));
+	node->type = AST_TERNARY;
+	node->cond = cond;
+	node->then_body = then_expr;
+	node->else_body = else_expr;
+	return node;
+}
+
+ASTNode* make_enum_def_node(char* name, ASTNode* items) {
+	ASTNode* node = calloc(1, sizeof(ASTNode));
+	node->type = AST_ENUM_DEF;
+	node->var_name = name;
+	node->left = items;
+	return node;
+}
+
+ASTNode* make_enum_item_node(char* name, ASTNode* val_expr) {
+	ASTNode* node = calloc(1, sizeof(ASTNode));
+	node->type = AST_ENUM_ITEM;
+	node->var_name = name;
+	node->left = val_expr;
+	return node;
+}
+
+ASTNode* make_cast_node(GincType target_type, ASTNode* expr) {
+	ASTNode* node = calloc(1, sizeof(ASTNode));
+	node->type = AST_CAST;
+	node->var_type = target_type;
+	node->left = expr;
+	return node;
+}
+
+ASTNode* make_ptr_vardecl_node(GincType target_type, char* var_name, ASTNode* init_expr) {
+	ASTNode* node = calloc(1, sizeof(ASTNode));
+	node->type = AST_VARDECL;
+	node->var_type = TYPE_PTR;
+	node->ptr_target_type = target_type;
+	node->var_name = var_name;
+	node->right = init_expr;
+	return node;
+}
+
+ASTNode* make_ptr_param_node(GincType target_type, char* var_name) {
+	ASTNode* node = calloc(1, sizeof(ASTNode));
+	node->type = AST_PARAM_DECL;
+	node->var_type = TYPE_PTR;
+	node->ptr_target_type = target_type;
+	node->var_name = var_name;
+	return node;
+}
+
+ASTNode* make_goto_node(char* label_name) {
+	ASTNode* node = calloc(1, sizeof(ASTNode));
+	node->type = AST_GOTO;
+	node->var_name = label_name;
+	return node;
+}
+
+ASTNode* make_label_node(char* label_name, ASTNode* stmt) {
+	ASTNode* node = calloc(1, sizeof(ASTNode));
+	node->type = AST_LABEL;
+	node->var_name = label_name;
+	node->left = stmt;
+	return node;
+}
+
+ASTNode* make_sizeof_type_node(GincType target_type) {
+	ASTNode* node = calloc(1, sizeof(ASTNode));
+	node->type = AST_SIZEOF_TYPE;
+	node->var_type = target_type;
+	return node;
+}
+
+ASTNode* make_sizeof_expr_node(ASTNode* expr) {
+	ASTNode* node = calloc(1, sizeof(ASTNode));
+	node->type = AST_SIZEOF_EXPR;
+	node->left = expr;
+	return node;
+}
+
+ASTNode* make_array2d_decl_node(GincType type, char* name, int dim1, int dim2, ASTNode* init_list) {
+	ASTNode* node = calloc(1, sizeof(ASTNode));
+	node->type = AST_ARRAY_DECL;
+	node->var_type = type;
+	node->var_name = name;
+	node->val = dim1;
+	node->dim2 = dim2;
+	node->right = init_list;
+	return node;
+}
+
+ASTNode* make_array2d_access_node(char* name, ASTNode* idx1, ASTNode* idx2) {
+	ASTNode* node = calloc(1, sizeof(ASTNode));
+	node->type = AST_ARRAY_ACCESS;
+	node->var_name = name;
+	node->left = idx1;
+	node->cond = idx2;
+	return node;
+}
+
+ASTNode* make_index2d_assign_node(char* name, ASTNode* idx1, ASTNode* idx2, ASTNode* rhs) {
+	ASTNode* node = calloc(1, sizeof(ASTNode));
+	node->type = AST_INDEX_ASSIGN;
+	node->var_name = name;
+	node->left = idx1;
+	node->cond = idx2;
+	node->right = rhs;
+	return node;
+}
+
+ASTNode* make_func_ptr_vardecl_node(GincType ret_type, char* name, ASTNode* params, ASTNode* init_expr) {
+	ASTNode* node = calloc(1, sizeof(ASTNode));
+	node->type = AST_VARDECL;
+	node->var_type = TYPE_VAR;
+	node->is_func_ptr = 1;
+	node->fn_ret_type = ret_type;
+	node->var_name = name;
+	node->left = params;
+	node->right = init_expr;
+	return node;
+}
+
+ASTNode* make_func_ptr_param_node(GincType ret_type, char* name, ASTNode* params) {
+	ASTNode* node = calloc(1, sizeof(ASTNode));
+	node->type = AST_PARAM_DECL;
+	node->var_type = TYPE_VAR;
+	node->is_func_ptr = 1;
+	node->fn_ret_type = ret_type;
+	node->var_name = name;
+	node->left = params;
+	return node;
+}
+
+ASTNode* make_lambda_node(GincType ret_type, ASTNode* params, ASTNode* body) {
+	ASTNode* node = calloc(1, sizeof(ASTNode));
+	node->type = AST_LAMBDA;
+	node->var_type = ret_type;
+	node->left = params;
+	node->body = body;
+	return node;
+}
+
+ASTNode* make_va_start_node(char* ap_name, char* last_param) {
+	ASTNode* node = calloc(1, sizeof(ASTNode));
+	node->type = AST_VA_START;
+	node->var_name = ap_name;
+	node->str_val = last_param;
+	return node;
+}
+
+ASTNode* make_va_arg_node(char* ap_name, GincType target_type) {
+	ASTNode* node = calloc(1, sizeof(ASTNode));
+	node->type = AST_VA_ARG;
+	node->var_name = ap_name;
+	node->var_type = target_type;
+	return node;
+}
+
+ASTNode* make_va_end_node(char* ap_name) {
+	ASTNode* node = calloc(1, sizeof(ASTNode));
+	node->type = AST_VA_END;
+	node->var_name = ap_name;
+	return node;
+}
+
 // ASTの構造をツリー状に表示するデバッグ関数
 void print_ast(ASTNode* node, int depth) {
 	if (!node) return;
 	for (int i = 0; i < depth; i++) printf("  ");
 	
 	switch (node->type) {
-		case AST_NUM:    printf("NUM(%d)\n", node->val); break;
+		case AST_NUM:    printf("NUM(%lld)\n", node->val); break;
 		case AST_FLOAT:  printf("FLOAT(%f)\n", node->float_val); break;
 		case AST_NULL:   printf("NULL\n"); break;
 		case AST_STR:    printf("STR(\"%s\")\n", node->var_name); break;
@@ -444,7 +648,7 @@ void print_ast(ASTNode* node, int depth) {
 		case AST_EQ:     printf("==\n"); break;
 		case AST_LT:     printf("<\n"); break;
 		case AST_MATCH:  printf("=~\n"); break;
-		case AST_ARRAY_DECL: printf("ARRAY_DECL(%s[%d])\n", node->var_name, node->val); break;
+		case AST_ARRAY_DECL: printf("ARRAY_DECL(%s[%lld])\n", node->var_name, node->val); break;
 		case AST_ARRAY_ACCESS: printf("ARRAY_ACCESS(%s)\n", node->var_name); break;
 		case AST_EXPR_LIST: printf("EXPR_LIST\n"); break;
 		case AST_FUNC_DECL: printf("FUNC_DECL(%s)\n", node->var_name); break;
@@ -468,17 +672,77 @@ void print_ast(ASTNode* node, int depth) {
 		case AST_TYPEDEF:
 			printf("TYPEDEF(base:%d, alias:%s)\n", node->var_type, node->var_name);
 			break;
+		case AST_SWITCH:
+			printf("SWITCH\n");
+			break;
+		case AST_CASE:
+			printf("CASE\n");
+			break;
+		case AST_DEFAULT:
+			printf("DEFAULT\n");
+			break;
+		case AST_BIT_NOT:
+			printf("~\n");
+			break;
+		case AST_TERNARY:
+			printf("TERNARY\n");
+			break;
+		case AST_ENUM_DEF:
+			printf("ENUM_DEF(%s)\n", node->var_name ? node->var_name : "");
+			break;
+		case AST_ENUM_ITEM:
+			printf("ENUM_ITEM(%s)\n", node->var_name);
+			break;
+		case AST_CAST:
+			printf("CAST(%d)\n", node->var_type);
+			break;
+		case AST_ADDR_OF:
+			printf("ADDR_OF\n");
+			break;
+		case AST_DEREF:
+			printf("DEREF\n");
+			break;
+		case AST_DEREF_ASSIGN:
+			printf("DEREF_ASSIGN\n");
+			break;
+		case AST_COMMA:
+			printf("COMMA\n");
+			break;
+		case AST_GOTO:
+			printf("GOTO(%s)\n", node->var_name);
+			break;
+		case AST_LABEL:
+			printf("LABEL(%s)\n", node->var_name);
+			break;
+		case AST_SIZEOF_TYPE:
+			printf("SIZEOF_TYPE(%d)\n", node->var_type);
+			break;
+		case AST_SIZEOF_EXPR:
+			printf("SIZEOF_EXPR\n");
+			break;
+		case AST_LAMBDA:
+			printf("LAMBDA\n");
+			break;
+		case AST_VA_START:
+			printf("VA_START(%s)\n", node->var_name);
+			break;
+		case AST_VA_ARG:
+			printf("VA_ARG(%s)\n", node->var_name);
+			break;
+		case AST_VA_END:
+			printf("VA_END(%s)\n", node->var_name);
+			break;
 	}
 	
 	// 子ノードの再帰表示
-	if (node->type == AST_SEQ || node->type == AST_ASSIGN || node->type == AST_ADD || node->type == AST_SUB || node->type == AST_MUL || node->type == AST_DIV || node->type == AST_MOD || node->type == AST_BIT_AND || node->type == AST_BIT_OR || node->type == AST_BIT_XOR || node->type == AST_LSHIFT || node->type == AST_RSHIFT || node->type == AST_LOGICAL_OR || node->type == AST_LOGICAL_AND || node->type == AST_EQ || node->type == AST_NEQ || node->type == AST_LT || node->type == AST_LE || node->type == AST_GT || node->type == AST_GE || node->type == AST_MATCH) {
+	if (node->type == AST_SEQ || node->type == AST_COMMA || node->type == AST_ASSIGN || node->type == AST_ADD || node->type == AST_SUB || node->type == AST_MUL || node->type == AST_DIV || node->type == AST_MOD || node->type == AST_BIT_AND || node->type == AST_BIT_OR || node->type == AST_BIT_XOR || node->type == AST_LSHIFT || node->type == AST_RSHIFT || node->type == AST_LOGICAL_OR || node->type == AST_LOGICAL_AND || node->type == AST_EQ || node->type == AST_NEQ || node->type == AST_LT || node->type == AST_LE || node->type == AST_GT || node->type == AST_GE || node->type == AST_MATCH) {
 		print_ast(node->left, depth + 1);
 		print_ast(node->right, depth + 1);
 	} else if (node->type == AST_VARDECL) {
 		print_ast(node->right, depth + 1);
 	} else if (node->type == AST_PRINT || node->type == AST_BLOCK || node->type == AST_LOGICAL_NOT) {
 		print_ast(node->left, depth + 1);
-	} else if (node->type == AST_IF) {
+	} else if (node->type == AST_IF || node->type == AST_TERNARY) {
 		print_ast(node->cond, depth + 1);
 		print_ast(node->then_body, depth + 1);
 		if (node->else_body) {
@@ -502,11 +766,14 @@ void print_ast(ASTNode* node, int depth) {
 		if (node->right) {
 			print_ast(node->right, depth + 1);
 		}
-	} else if (node->type == AST_FUNC_DECL) {
+	} else if (node->type == AST_FUNC_DECL || node->type == AST_LAMBDA) {
 		if (node->left) print_ast(node->left, depth + 1);
 		if (node->body) print_ast(node->body, depth + 1);
-	} else if (node->type == AST_FUNC_CALL || node->type == AST_METHOD_CALL || node->type == AST_RETURN || node->type == AST_THROW || node->type == AST_UNARY_MINUS || node->type == AST_POST_INC || node->type == AST_POST_DEC) {
+	} else if (node->type == AST_FUNC_CALL || node->type == AST_METHOD_CALL || node->type == AST_RETURN || node->type == AST_THROW || node->type == AST_UNARY_MINUS || node->type == AST_POST_INC || node->type == AST_POST_DEC || node->type == AST_BIT_NOT || node->type == AST_CAST || node->type == AST_ADDR_OF || node->type == AST_DEREF || node->type == AST_LABEL || node->type == AST_SIZEOF_EXPR) {
 		if (node->left) print_ast(node->left, depth + 1);
+	} else if (node->type == AST_DEREF_ASSIGN) {
+		if (node->left) print_ast(node->left, depth + 1);
+		if (node->right) print_ast(node->right, depth + 1);
 	} else if (node->type == AST_TRY) {
 		if (node->then_body) print_ast(node->then_body, depth + 1);
 		if (node->else_body) print_ast(node->else_body, depth + 1);
@@ -514,7 +781,17 @@ void print_ast(ASTNode* node, int depth) {
 		if (node->left) print_ast(node->left, depth + 1);
 		if (node->right) print_ast(node->right, depth + 1);
 		if (node->finally_body) print_ast(node->finally_body, depth + 1);
-	} else if (node->type == AST_CLASS_DEF || node->type == AST_CATCH_BLOCK) {
+	} else if (node->type == AST_CLASS_DEF || node->type == AST_CATCH_BLOCK || node->type == AST_ENUM_DEF || node->type == AST_ENUM_ITEM) {
+		if (node->left) print_ast(node->left, depth + 1);
+	} else if (node->type == AST_SWITCH) {
+		if (node->left) print_ast(node->left, depth + 1);
+		for (ASTNode* cur = node->right; cur != NULL; cur = cur->next) {
+			print_ast(cur, depth + 1);
+		}
+	} else if (node->type == AST_CASE) {
+		if (node->left) print_ast(node->left, depth + 1);
+		if (node->right) print_ast(node->right, depth + 1);
+	} else if (node->type == AST_DEFAULT) {
 		if (node->left) print_ast(node->left, depth + 1);
 	}
 }

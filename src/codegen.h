@@ -3,7 +3,7 @@
 
 #include "ast.h"
 
-// ASTを受け取ってLLVM IRを生成・出力する関数
-void generate_code(ASTNode* root);
+extern void generate_code(ASTNode* root);
+extern int generate_code_ex(ASTNode* root, int verbose, int* out_exit_code);
 
 #endif

@@ -1,5 +1,6 @@
 #! /usr/bin/env gint
-
+// [DISABLED] 配列境界外アクセス時の ginc_throw(101) による意図的異常終了テスト（旧仕様）のためコメントアウト
+/*
 // [10] のようなサイズ指定はさせない（バッファオーバーランを防ぐため）
 int list[10] = { 1, 2, 3, 4, 5 };
 
@@ -7,3 +8,4 @@ print(list[0]);
 print(list[2]);
 print(list[4]);
 print(list[11]);
+*/

@@ -1,8 +1,11 @@
+#include <dlfcn.h>
 #include <regex.h>
 #include <setjmp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include "ginc_config.h"
 
 #define MAX_TRY 100
 static void* try_stack[MAX_TRY];
@@ -207,4 +210,246 @@ int ginc_get_exc_int() {
 
 void* ginc_get_exc_obj() {
 	return ginc_exc_obj;
+}
+
+/* --- ファットポインタ (参照 + 配列/文字列カーソル) --- */
+typedef enum {
+	GPTR_SCALAR = 0,
+	GPTR_ARRAY = 1,
+	GPTR_CSTR = 2
+} GincPtrKind;
+
+#define GINC_PTR_MAGIC 0x47494E43U
+
+typedef struct {
+	unsigned int magic;
+	void* base;
+	long long index;
+	long long length;
+	int elem_size;
+	int kind;
+} GincPtr;
+
+void* ginc_ptr_make(void* base, long long index, long long length, int elem_size, int kind) {
+	GincPtr* p = malloc(sizeof(GincPtr));
+	p->magic = GINC_PTR_MAGIC;
+	p->base = base;
+	p->index = index;
+	p->length = length;
+	p->elem_size = elem_size;
+	p->kind = kind;
+	return p;
+}
+
+void* ginc_ptr_make_cstr(char const* s) {
+	if (!s) return NULL;
+	return ginc_ptr_make((void*)s, 0, (long long)strlen(s), 1, GPTR_CSTR);
+}
+
+void* ginc_ptr_add(void* ptr, long long offset) {
+	GincPtr* p = (GincPtr*)ptr;
+	if (!p) {
+		ginc_throw(103);
+		return NULL;
+	}
+	if (p->kind == GPTR_SCALAR) {
+		if (offset == 0) return ginc_ptr_make(p->base, -1, 0, p->elem_size, GPTR_SCALAR);
+		fprintf(stderr, "Ga! (Runtime Error): Pointer arithmetic on scalar reference is not allowed\n");
+		ginc_throw(103);
+		return NULL;
+	}
+	return ginc_ptr_make(p->base, p->index + offset, p->length, p->elem_size, p->kind);
+}
+
+long long ginc_ptr_diff(void* a_ptr, void* b_ptr) {
+	GincPtr* a = (GincPtr*)a_ptr;
+	GincPtr* b = (GincPtr*)b_ptr;
+	if (!a || !b || a->base != b->base) {
+		fprintf(stderr, "Ga! (Runtime Error): Invalid pointer difference\n");
+		ginc_throw(103);
+		return 0;
+	}
+	return a->index - b->index;
+}
+
+void* ginc_ptr_elem_addr(void* ptr, long long offset) {
+	GincPtr* p = (GincPtr*)ptr;
+	if (!p || !p->base) {
+		fprintf(stderr, "Ga! (Runtime Error): Null pointer dereference\n");
+		ginc_throw(103);
+		return NULL;
+	}
+	if (p->kind == GPTR_SCALAR) {
+		if (offset != 0) {
+			fprintf(stderr, "Ga! (Runtime Error): Out-of-bounds offset on scalar pointer\n");
+			ginc_throw(103);
+			return NULL;
+		}
+		return p->base;
+	}
+	long long const idx = p->index + offset;
+	if (p->kind == GPTR_CSTR) {
+		if (idx < 0 || idx > p->length) {
+			fprintf(stderr, "Ga! (Runtime Error): String pointer out of bounds (index=%lld, len=%lld)\n", idx, p->length);
+			ginc_throw(103);
+			return NULL;
+		}
+		return (char*)p->base + idx;
+	}
+	if (idx < 0 || idx >= p->length) {
+		fprintf(stderr, "Ga! (Runtime Error): Array pointer out of bounds (index=%lld, len=%lld)\n", idx, p->length);
+		ginc_throw(103);
+		return NULL;
+	}
+	return (char*)p->base + idx * (long long)p->elem_size;
+}
+
+char const* ginc_ptr_cstr(void* ptr) {
+	if (!ptr) return "(null)";
+	GincPtr* p = (GincPtr*)ptr;
+	if (p->magic != GINC_PTR_MAGIC) return (char const*)ptr;
+	if (!p->base) return "(null)";
+	if (p->kind == GPTR_CSTR) {
+		if (p->index < 0 || p->index > p->length) return "";
+		return (char const*)p->base + p->index;
+	}
+	if (p->kind == GPTR_ARRAY && p->elem_size == 1) {
+		if (p->index < 0 || p->index >= p->length) return "";
+		return (char const*)p->base + p->index;
+	}
+	return (char const*)p->base;
+}
+
+static int saved_argc = 0;
+static char** saved_argv = NULL;
+
+void ginc_set_args(int argc, char** argv) {
+	saved_argc = argc;
+	saved_argv = argv;
+}
+
+int ginc_get_argc(void) {
+	return saved_argc;
+}
+
+void* ginc_get_argv(void) {
+	return ginc_ptr_make(saved_argv, 0, (long long)saved_argc, (int)sizeof(char*), GPTR_ARRAY);
+}
+
+void* ginc_ptr_retype(void* ptr, int elem_size) {
+	GincPtr* p = (GincPtr*)ptr;
+	if (!p || elem_size <= 0) return ptr;
+	if (p->kind == GPTR_ARRAY && p->elem_size != elem_size) {
+		long long const total_bytes = p->length * (long long)p->elem_size;
+		p->elem_size = elem_size;
+		p->length = total_bytes / (long long)elem_size;
+	}
+	return p;
+}
+
+#define MAX_LOADED_LIBS 32
+static void* loaded_libs[MAX_LOADED_LIBS];
+static int loaded_lib_count = 0;
+
+#define MAX_LIB_DIRS 32
+static char* extra_lib_dirs[MAX_LIB_DIRS];
+static int extra_lib_dir_count = 0;
+static char* runtime_exe_dir = NULL;
+
+void ginc_add_lib_dir_impl(char const* dir) {
+	if (!dir || !*dir || extra_lib_dir_count >= MAX_LIB_DIRS) return;
+	extra_lib_dirs[extra_lib_dir_count++] = strdup(dir);
+}
+
+void ginc_set_exe_dir(char const* dir) {
+	if (!dir || !*dir) return;
+	free(runtime_exe_dir);
+	runtime_exe_dir = strdup(dir);
+}
+
+static void* try_dlopen_in_dir(char const* dir, char const* lib_name) {
+	if (!dir || !*dir) return NULL;
+	char buf[1024];
+	snprintf(buf, sizeof(buf), "%s/%s", dir, lib_name);
+	return dlopen(buf, RTLD_NOW | RTLD_GLOBAL);
+}
+
+void ginc_load_library(char const* path) {
+	if (!path || !*path) return;
+	void* handle = dlopen(path, RTLD_NOW | RTLD_GLOBAL);
+
+	/* 1. -L オプション指定ディレクトリ */
+	for (int i = 0; !handle && i < extra_lib_dir_count; i++) {
+		handle = try_dlopen_in_dir(extra_lib_dirs[i], path);
+	}
+
+	/* 2. 環境変数 GINC_LIB_PATH (コロン区切り) */
+	if (!handle) {
+		char const* env_lib = getenv("GINC_LIB_PATH");
+		if (env_lib && *env_lib) {
+			char* copy = strdup(env_lib);
+			char* tok = strtok(copy, ":");
+			while (tok && !handle) {
+				handle = try_dlopen_in_dir(tok, path);
+				tok = strtok(NULL, ":");
+			}
+			free(copy);
+		}
+	}
+
+	/* 3. カレント・実行バイナリ相対パス */
+	if (!handle) handle = try_dlopen_in_dir("./std", path);
+	if (!handle && runtime_exe_dir) {
+		char rel1[1024];
+		char rel2[1024];
+		char rel3[1024];
+		snprintf(rel1, sizeof(rel1), "%s/std", runtime_exe_dir);
+		snprintf(rel2, sizeof(rel2), "%s/../lib/ginc/lib", runtime_exe_dir);
+		snprintf(rel3, sizeof(rel3), "%s/../ginc/lib", runtime_exe_dir);
+		handle = try_dlopen_in_dir(rel1, path);
+		if (!handle) handle = try_dlopen_in_dir(rel2, path);
+		if (!handle) handle = try_dlopen_in_dir(rel3, path);
+	}
+
+	/* 4. アカウントローカル (~/.local/<host>/ginc/lib, ~/.local/ginc/lib) */
+	if (!handle) {
+		char const* home = getenv("HOME");
+		if (home && *home) {
+			char host_buf[256] = {0};
+			if (gethostname(host_buf, sizeof(host_buf) - 1) == 0 && host_buf[0]) {
+				char* dot = strchr(host_buf, '.');
+				if (dot) *dot = '\0';
+				char host_lib[1024];
+				snprintf(host_lib, sizeof(host_lib), "%s/.local/%s/ginc/lib", home, host_buf);
+				handle = try_dlopen_in_dir(host_lib, path);
+			}
+			if (!handle) {
+				char local_lib[1024];
+				snprintf(local_lib, sizeof(local_lib), "%s/.local/ginc/lib", home);
+				handle = try_dlopen_in_dir(local_lib, path);
+			}
+		}
+	}
+
+	/* 5. ビルド時 PREFIX デフォルト */
+	if (!handle) handle = try_dlopen_in_dir(GINC_DEFAULT_LIBDIR, path);
+
+	if (handle) {
+		if (loaded_lib_count < MAX_LOADED_LIBS) {
+			loaded_libs[loaded_lib_count++] = handle;
+		}
+		return;
+	}
+
+	fprintf(stderr, "Ga! (Runtime Error): Failed to load library '%s': %s\n", path, dlerror());
+	exit(1);
+}
+
+void* ginc_resolve_symbol(char const* name) {
+	if (!name) return NULL;
+	for (int i = loaded_lib_count - 1; i >= 0; i--) {
+		void* sym = dlsym(loaded_libs[i], name);
+		if (sym) return sym;
+	}
+	return dlsym(RTLD_DEFAULT, name);
 }

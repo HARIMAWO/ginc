@@ -1,0 +1,15 @@
+#!/usr/bin/env ginc
+
+// structは警告が出つつ、classとして処理されるかのテスト
+struct Exception e1;
+class Exception e2;
+
+// ドット演算子によるHashへの代入（e1["code"] = 404 と同じ意味になる）
+e1.code = 404;
+e1.line = 128;
+
+print(e1.code);
+
+// [] と . が全く同じHash空間を指しているかのテスト
+e2["code"] = 500;
+print(e2.code); // 500が出力されるはず

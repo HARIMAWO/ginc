@@ -1,0 +1,50 @@
+#!/usr/bin/env ginc
+
+int add(int a, int b) {
+	return a + b;
+}
+
+int mul(int a, int b) {
+	return a * b;
+}
+
+int apply(int (*op)(int, int), int x, int y) {
+	return op(x, y);
+}
+
+// グローバル2次元配列
+int g_mat[2][3] = {
+	{1, 2, 3},
+	{4, 5, 6}
+};
+
+int main(void) {
+	// 1. 2次元配列（グローバル・ローカル・sizeof）
+	print(g_mat[0][0]); // 1
+	print(g_mat[1][2]); // 6
+	print(sizeof(g_mat)); // 24
+
+	int l_mat[2][2];
+	l_mat[0][1] = 42;
+	l_mat[1][0] = 99;
+	print(l_mat[0][1]); // 42
+	print(l_mat[1][0]); // 99
+
+	// 2. 関数ポインタ
+	int (*fp)(int, int) = add;
+	print(fp(3, 4));     // 7
+	fp = mul;
+	print((*fp)(3, 4));  // 12
+	print(apply(add, 10, 20)); // 30
+
+	// 3. ラムダ式
+	int (*sq)(int) = [](int x) { return x * x; };
+	print(sq(9)); // 81
+
+	print(apply([](int a, int b) { return a - b; }, 50, 8)); // 42
+
+	double (*half)(double) = [](double v) -> double { return v / 2.0; };
+	print(half(9.0)); // 4.500000
+
+	return 0;
+}

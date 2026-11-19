@@ -1,0 +1,10 @@
+#!/usr/bin/env ginc
+
+// 静的型付けでの double 宣言とリテラル
+double pi = 3.14159;
+print(pi);
+
+// クラスの動的プロパティへの代入 (裏側で自動的に Boxed Double になるかテスト)
+class Math c;
+c.ratio = 1.618;
+print(c.ratio);

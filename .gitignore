@@ -1,8 +1,13 @@
 .aider*
 src/*.o
 ginc
+libginc.a
+libginc.so
+std/*.so
+Makefile
+src/ginc_config.h
 src/lexer.c
 src/parser.c
 src/parser.h
 *.core
-test*.ginc
+/test*.ginc

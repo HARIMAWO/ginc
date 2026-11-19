@@ -1,0 +1,4 @@
+#define FOO 100
+int x = FOO;
+// わざと文法エラーを起こす
+invalid_syntax_here;

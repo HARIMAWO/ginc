@@ -1,0 +1,24 @@
+#!/usr/bin/env ginc
+
+int i = 0;
+int sum = 0;
+
+// 1. do-while と i++ のテスト
+do {
+    sum = sum + i;
+    i++;
+} while (i < 5);
+print(sum); // 0+1+2+3+4 = 10 が出力されるはず
+
+// 2. for, break, continue のテスト
+int evens = 0;
+for (i = 0; i < 10; i++) {
+    if (i == 5) {
+        break; // 5になったらループを完全に抜ける
+    }
+    if (i % 2 != 0) {
+        continue; // 奇数の場合は以下の処理をスキップして i++ へ
+    }
+    evens = evens + i;
+}
+print(evens); // 0 + 2 + 4 = 6 が出力されるはず

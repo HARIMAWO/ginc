@@ -1,0 +1,17 @@
+#!/usr/bin/env ginc
+
+int a = 0;
+int b = 0;
+// 1. forループ内でのインライン変数宣言 (int i = 0;)
+for (int i = 0; i < 10; i++) {
+    print(a++); // 後置
+    print(++b); // 前置
+}
+
+// 2. 初期化なし変数宣言 と 無限ループのテスト
+int c;
+for (;;) {
+    c++;
+    if (c > 3) break;
+}
+print(c);

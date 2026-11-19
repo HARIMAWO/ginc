@@ -1,0 +1,8 @@
+#!/usr/bin/env ginc
+
+typedef int my_int;
+typedef my_int my_int_2; // 多段定義のテスト
+typedef int my_int;     // 同じ定義の重複（エラーにならないべき）
+
+my_int_2 x = 100;
+print(x);

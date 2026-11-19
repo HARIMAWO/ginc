@@ -12,20 +12,23 @@ static int current_access = 0;
 %}
 
 %union {
-    int num;
+    long long num;
     double float_val;
     char* str;
     ASTNode* ast;
+    GincType ginc_type;
 }
 
 %token <num> T_NUM
 %token <float_val> T_FLOAT_LITERAL
 %token <str> T_IDENT T_STR T_STRING T_REGEX T_USER_TYPE
-%token T_INT_TYPE T_STR_TYPE T_VAR_TYPE T_DOUBLE_TYPE T_ASSIGN T_PLUS T_MINUS T_STAR T_SLASH T_SEMI T_PRINT T_LPAREN T_RPAREN T_IF T_ELSE T_WHILE T_LBRACE T_RBRACE T_EQ T_LT T_MATCH T_LBRACKET T_RBRACKET T_COMMA T_RETURN T_TRY T_CATCH T_THROW T_FINALLY T_DOT T_CLASS T_STRUCT T_PUBLIC T_PRIVATE T_COLON T_TRUE T_FALSE T_NULL T_VOID T_CHAR T_FILE T_AND T_OR T_NOT T_NEQ T_GT T_LE T_GE T_MOD T_AMP T_FOR T_INC T_DEC T_DO T_BREAK T_CONTINUE T_TYPEDEF T_BIT_OR_TOK T_XOR T_LSHIFT T_RSHIFT
+%token T_INT_TYPE T_STR_TYPE T_VAR_TYPE T_DOUBLE_TYPE T_ASSIGN T_PLUS T_MINUS T_STAR T_SLASH T_SEMI T_PRINT T_LPAREN T_RPAREN T_IF T_ELSE T_WHILE T_LBRACE T_RBRACE T_EQ T_LT T_MATCH T_LBRACKET T_RBRACKET T_COMMA T_RETURN T_TRY T_CATCH T_THROW T_FINALLY T_DOT T_CLASS T_STRUCT T_PUBLIC T_PRIVATE T_COLON T_TRUE T_FALSE T_NULL T_VOID T_CHAR T_FILE T_AND T_OR T_NOT T_NEQ T_GT T_LE T_GE T_MOD T_AMP T_FOR T_INC T_DEC T_DO T_BREAK T_CONTINUE T_TYPEDEF T_BIT_OR_TOK T_XOR T_LSHIFT T_RSHIFT T_SWITCH T_CASE T_DEFAULT T_ADD_ASSIGN T_SUB_ASSIGN T_MUL_ASSIGN T_DIV_ASSIGN T_MOD_ASSIGN T_AND_ASSIGN T_OR_ASSIGN T_XOR_ASSIGN T_LSHIFT_ASSIGN T_RSHIFT_ASSIGN T_TILDE T_QUESTION T_CONST T_ENUM T_SHORT T_LONG T_UNSIGNED T_FLOAT_TYPE T_BOOL T_STATIC T_EXTERN T_GOTO T_SIZEOF T_ARROW T_ELLIPSIS T_VA_LIST T_VA_START T_VA_ARG T_VA_END
 
-%type <ast> stmt_list stmt expr expr_list param_list param_decl member_decl member_list class_def class_member class_item class_member_list finally_clause func_body catch_block catch_list opt_expr for_init
+%type <ast> stmt_list stmt expr comma_expr expr_list param_list param_decl member_decl member_list class_def class_member class_item class_member_list finally_clause func_body catch_block catch_list opt_expr for_init case_list case_item opt_stmt_list case_val enum_def enum_item enum_list array2d_init_row array2d_init_list fn_ptr_param fn_ptr_param_list
+%type <ginc_type> ext_type
 
-%right T_ASSIGN
+%right T_ASSIGN T_ADD_ASSIGN T_SUB_ASSIGN T_MUL_ASSIGN T_DIV_ASSIGN T_MOD_ASSIGN T_AND_ASSIGN T_OR_ASSIGN T_XOR_ASSIGN T_LSHIFT_ASSIGN T_RSHIFT_ASSIGN
+%right T_QUESTION T_COLON
 %left T_OR
 %left T_AND
 %left T_BIT_OR_TOK
@@ -36,8 +39,8 @@ static int current_access = 0;
 %left T_LSHIFT T_RSHIFT
 %left T_PLUS T_MINUS
 %left T_STAR T_SLASH T_MOD
-%right UMINUS T_NOT USTAR UAMP T_INC T_DEC
-%left T_DOT T_LBRACKET T_LPAREN
+%right UMINUS T_NOT T_TILDE USTAR UAMP T_INC T_DEC
+%left T_DOT T_ARROW T_LBRACKET T_LPAREN
 
 %%
 
@@ -55,8 +58,19 @@ expr_list:
     | expr T_COMMA expr_list { $$ = make_expr_list_node($1, $3); }
     ;
 
+ext_type:
+    T_SHORT { $$ = TYPE_SHORT; }
+    | T_LONG { $$ = TYPE_LONG; }
+    | T_UNSIGNED { $$ = TYPE_UINT; }
+    | T_UNSIGNED T_INT_TYPE { $$ = TYPE_UINT; }
+    | T_FLOAT_TYPE { $$ = TYPE_FLOAT; }
+    | T_BOOL { $$ = TYPE_BOOL; }
+    ;
+
 param_decl:
     T_INT_TYPE T_IDENT { $$ = make_param_decl_node(TYPE_INT, $2); }
+  | T_CHAR T_IDENT { $$ = make_param_decl_node(TYPE_CHAR, $2); }
+  | ext_type T_IDENT { $$ = make_param_decl_node($1, $2); }
   | T_STR_TYPE T_IDENT { $$ = make_param_decl_node(TYPE_STR, $2); }
   | T_VAR_TYPE T_IDENT { $$ = make_param_decl_node(TYPE_VAR, $2); }
   | T_DOUBLE_TYPE T_IDENT { $$ = make_param_decl_node(TYPE_DOUBLE, $2); }
@@ -65,9 +79,23 @@ param_decl:
         GincType bt = resolve_type_alias($1, &found);
         $$ = make_param_decl_node(found ? bt : TYPE_INT, $2);
     }
-  | T_CHAR T_STAR T_IDENT T_LBRACKET T_RBRACKET { $$ = make_param_decl_node(TYPE_VAR, $3); }
-  | T_CHAR T_STAR T_IDENT { $$ = make_param_decl_node(TYPE_STR, $3); }
+  | T_CHAR T_STAR T_IDENT T_LBRACKET T_RBRACKET { $$ = make_ptr_param_node(TYPE_STR, $3); }
+  | T_CHAR T_STAR T_STAR T_IDENT { $$ = make_ptr_param_node(TYPE_STR, $4); }
+  | T_CHAR T_STAR T_IDENT { $$ = make_ptr_param_node(TYPE_CHAR, $3); }
+  | T_INT_TYPE T_STAR T_IDENT { $$ = make_ptr_param_node(TYPE_INT, $3); }
+  | T_DOUBLE_TYPE T_STAR T_IDENT { $$ = make_ptr_param_node(TYPE_DOUBLE, $3); }
+  | ext_type T_STAR T_IDENT { $$ = make_ptr_param_node($1, $3); }
+  | T_VOID T_STAR T_IDENT { $$ = make_ptr_param_node(TYPE_VOID, $3); }
   | T_FILE T_STAR T_IDENT { $$ = make_param_decl_node(TYPE_FILE, $3); }
+  | T_INT_TYPE T_LPAREN T_STAR T_IDENT T_RPAREN T_LPAREN fn_ptr_param_list T_RPAREN {
+        $$ = make_func_ptr_param_node(TYPE_INT, $4, $7);
+    }
+  | T_VOID T_LPAREN T_STAR T_IDENT T_RPAREN T_LPAREN fn_ptr_param_list T_RPAREN {
+        $$ = make_func_ptr_param_node(TYPE_VOID, $4, $7);
+    }
+  | T_DOUBLE_TYPE T_LPAREN T_STAR T_IDENT T_RPAREN T_LPAREN fn_ptr_param_list T_RPAREN {
+        $$ = make_func_ptr_param_node(TYPE_DOUBLE, $4, $7);
+    }
   | T_IDENT T_IDENT {
         int found = 0;
         GincType bt = resolve_type_alias($1, &found);
@@ -83,8 +111,38 @@ param_decl:
 param_list:
     /* empty */ { $$ = NULL; }
     | T_VOID { $$ = NULL; }
+    | T_ELLIPSIS {
+        ASTNode* n = make_param_decl_node(TYPE_VOID, "__ellipsis__");
+        n->is_variadic = 1;
+        $$ = make_expr_list_node(n, NULL);
+    }
     | param_decl { $$ = make_expr_list_node($1, NULL); }
     | param_decl T_COMMA param_list { $$ = make_expr_list_node($1, $3); }
+    ;
+
+fn_ptr_param:
+    T_INT_TYPE { $$ = make_param_decl_node(TYPE_INT, ""); }
+    | T_DOUBLE_TYPE { $$ = make_param_decl_node(TYPE_DOUBLE, ""); }
+    | T_CHAR { $$ = make_param_decl_node(TYPE_CHAR, ""); }
+    | ext_type { $$ = make_param_decl_node($1, ""); }
+    | T_STR_TYPE { $$ = make_param_decl_node(TYPE_STR, ""); }
+    | param_decl { $$ = $1; }
+    ;
+
+fn_ptr_param_list:
+    /* empty */ { $$ = NULL; }
+    | T_VOID { $$ = NULL; }
+    | fn_ptr_param { $$ = make_expr_list_node($1, NULL); }
+    | fn_ptr_param T_COMMA fn_ptr_param_list { $$ = make_expr_list_node($1, $3); }
+    ;
+
+array2d_init_row:
+    T_LBRACE expr_list T_RBRACE { $$ = $2; }
+    ;
+
+array2d_init_list:
+    array2d_init_row { $$ = make_expr_list_node($1, NULL); }
+    | array2d_init_row T_COMMA array2d_init_list { $$ = make_expr_list_node($1, $3); }
     ;
 
 member_decl:
@@ -116,13 +174,64 @@ member_list:
 
 opt_expr:
     /* empty */ { $$ = NULL; }
-    | expr { $$ = $1; }
+    | comma_expr { $$ = $1; }
+    ;
+
+case_val:
+    T_NUM { $$ = make_num_node($1); }
+    | T_MINUS T_NUM { $$ = make_num_node(-$2); }
+    | T_IDENT { $$ = make_var_node($1); }
+    ;
+
+enum_item:
+    T_IDENT { $$ = make_enum_item_node($1, NULL); }
+    | T_IDENT T_ASSIGN T_NUM { $$ = make_enum_item_node($1, make_num_node($3)); }
+    | T_IDENT T_ASSIGN T_MINUS T_NUM { $$ = make_enum_item_node($1, make_num_node(-$4)); }
+    ;
+
+enum_list:
+    enum_item { $$ = make_expr_list_node($1, NULL); }
+    | enum_item T_COMMA { $$ = make_expr_list_node($1, NULL); }
+    | enum_item T_COMMA enum_list { $$ = make_expr_list_node($1, $3); }
+    ;
+
+enum_def:
+    T_ENUM T_IDENT T_LBRACE enum_list T_RBRACE T_SEMI {
+        $$ = make_enum_def_node($2, $4);
+    }
+    | T_ENUM T_LBRACE enum_list T_RBRACE T_SEMI {
+        $$ = make_enum_def_node(NULL, $3);
+    }
+    ;
+
+opt_stmt_list:
+    /* empty */ { $$ = NULL; }
+    | stmt_list { $$ = $1; }
+    ;
+
+case_item:
+    T_CASE case_val T_COLON opt_stmt_list {
+        $$ = make_case_node($2, $4);
+    }
+    | T_DEFAULT T_COLON opt_stmt_list {
+        $$ = make_default_node($3);
+    }
+    ;
+
+case_list:
+    /* empty */ { $$ = NULL; }
+    | case_item case_list {
+        $1->next = $2;
+        $$ = $1;
+    }
     ;
 
 for_init:
     /* empty */ { $$ = NULL; }
-    | expr { $$ = $1; }
+    | comma_expr { $$ = $1; }
     | T_INT_TYPE T_IDENT T_ASSIGN expr { $$ = make_vardecl_node(TYPE_INT, $2, $4); }
+    | T_CHAR T_IDENT T_ASSIGN expr { $$ = make_vardecl_node(TYPE_CHAR, $2, $4); }
+    | ext_type T_IDENT T_ASSIGN expr { $$ = make_vardecl_node($1, $2, $4); }
     | T_STR_TYPE T_IDENT T_ASSIGN expr { $$ = make_vardecl_node(TYPE_STR, $2, $4); }
     | T_DOUBLE_TYPE T_IDENT T_ASSIGN expr { $$ = make_vardecl_node(TYPE_DOUBLE, $2, $4); }
     | T_VAR_TYPE T_IDENT T_ASSIGN expr { $$ = make_vardecl_node(TYPE_VAR, $2, $4); }
@@ -220,6 +329,10 @@ stmt:
     | T_TYPEDEF T_STR_TYPE T_USER_TYPE T_SEMI { $$ = make_typedef_node(TYPE_STR, $3); }
     | T_TYPEDEF T_DOUBLE_TYPE T_IDENT T_SEMI { $$ = make_typedef_node(TYPE_DOUBLE, $3); }
     | T_TYPEDEF T_DOUBLE_TYPE T_USER_TYPE T_SEMI { $$ = make_typedef_node(TYPE_DOUBLE, $3); }
+    | T_TYPEDEF T_CHAR T_IDENT T_SEMI { $$ = make_typedef_node(TYPE_CHAR, $3); }
+    | T_TYPEDEF T_CHAR T_USER_TYPE T_SEMI { $$ = make_typedef_node(TYPE_CHAR, $3); }
+    | T_TYPEDEF ext_type T_IDENT T_SEMI { $$ = make_typedef_node($2, $3); }
+    | T_TYPEDEF ext_type T_USER_TYPE T_SEMI { $$ = make_typedef_node($2, $3); }
     | T_TYPEDEF T_FILE T_STAR T_IDENT T_SEMI { $$ = make_typedef_node(TYPE_FILE, $4); }
     | T_TYPEDEF T_FILE T_STAR T_USER_TYPE T_SEMI { $$ = make_typedef_node(TYPE_FILE, $4); }
     | T_TYPEDEF T_USER_TYPE T_IDENT T_SEMI { $$ = make_typedef_node_from_user_type($2, $3); }
@@ -258,6 +371,11 @@ stmt:
         GincType bt = resolve_type_alias($1, &found);
         $$ = make_func_decl_node(found ? bt : TYPE_INT, $2, $4, $6);
     }
+    | T_USER_TYPE T_IDENT T_LPAREN param_list T_RPAREN T_SEMI {
+        int found = 0;
+        GincType bt = resolve_type_alias($1, &found);
+        $$ = make_func_decl_node(found ? bt : TYPE_INT, $2, $4, NULL);
+    }
     | T_IDENT T_IDENT T_SEMI {
         int found = 0;
         GincType bt = resolve_type_alias($1, &found);
@@ -288,6 +406,33 @@ stmt:
     }
     | T_VOID T_IDENT T_LPAREN param_list T_RPAREN func_body {
         $$ = make_func_decl_node(TYPE_VOID, $2, $4, $6);
+    }
+    | T_INT_TYPE T_IDENT T_LPAREN param_list T_RPAREN T_SEMI {
+        $$ = make_func_decl_node(TYPE_INT, $2, $4, NULL);
+    }
+    | T_STR_TYPE T_IDENT T_LPAREN param_list T_RPAREN T_SEMI {
+        $$ = make_func_decl_node(TYPE_STR, $2, $4, NULL);
+    }
+    | T_DOUBLE_TYPE T_IDENT T_LPAREN param_list T_RPAREN T_SEMI {
+        $$ = make_func_decl_node(TYPE_DOUBLE, $2, $4, NULL);
+    }
+    | T_VOID T_IDENT T_LPAREN param_list T_RPAREN T_SEMI {
+        $$ = make_func_decl_node(TYPE_VOID, $2, $4, NULL);
+    }
+    | T_CHAR T_IDENT T_LPAREN param_list T_RPAREN func_body {
+        $$ = make_func_decl_node(TYPE_CHAR, $2, $4, $6);
+    }
+    | T_CHAR T_IDENT T_LPAREN param_list T_RPAREN T_SEMI {
+        $$ = make_func_decl_node(TYPE_CHAR, $2, $4, NULL);
+    }
+    | ext_type T_IDENT T_LPAREN param_list T_RPAREN func_body {
+        $$ = make_func_decl_node($1, $2, $4, $6);
+    }
+    | ext_type T_IDENT T_LPAREN param_list T_RPAREN T_SEMI {
+        $$ = make_func_decl_node($1, $2, $4, NULL);
+    }
+    | enum_def {
+        $$ = $1;
     }
     | T_RETURN expr T_SEMI {
         $$ = make_return_node($2);
@@ -328,6 +473,162 @@ stmt:
     | T_INT_TYPE T_IDENT T_LBRACKET T_NUM T_RBRACKET T_ASSIGN T_LBRACE expr_list T_RBRACE T_SEMI {
         $$ = make_array_decl_node(TYPE_INT, $2, $4, $8);
     }
+    | T_INT_TYPE T_IDENT T_LBRACKET T_RBRACKET T_ASSIGN T_LBRACE expr_list T_RBRACE T_SEMI {
+        $$ = make_array_decl_node(TYPE_INT, $2, -1, $7);
+    }
+    | T_INT_TYPE T_IDENT T_LBRACKET T_NUM T_RBRACKET T_SEMI {
+        $$ = make_array_decl_node(TYPE_INT, $2, $4, NULL);
+    }
+    | T_INT_TYPE T_IDENT T_LBRACKET T_NUM T_RBRACKET T_LBRACKET T_NUM T_RBRACKET T_SEMI {
+        $$ = make_array2d_decl_node(TYPE_INT, $2, $4, $7, NULL);
+    }
+    | T_INT_TYPE T_IDENT T_LBRACKET T_NUM T_RBRACKET T_LBRACKET T_NUM T_RBRACKET T_ASSIGN T_LBRACE array2d_init_list T_RBRACE T_SEMI {
+        $$ = make_array2d_decl_node(TYPE_INT, $2, $4, $7, $11);
+    }
+    | T_DOUBLE_TYPE T_IDENT T_LBRACKET T_NUM T_RBRACKET T_LBRACKET T_NUM T_RBRACKET T_SEMI {
+        $$ = make_array2d_decl_node(TYPE_DOUBLE, $2, $4, $7, NULL);
+    }
+    | T_DOUBLE_TYPE T_IDENT T_LBRACKET T_NUM T_RBRACKET T_LBRACKET T_NUM T_RBRACKET T_ASSIGN T_LBRACE array2d_init_list T_RBRACE T_SEMI {
+        $$ = make_array2d_decl_node(TYPE_DOUBLE, $2, $4, $7, $11);
+    }
+    | ext_type T_IDENT T_LBRACKET T_NUM T_RBRACKET T_LBRACKET T_NUM T_RBRACKET T_SEMI {
+        $$ = make_array2d_decl_node($1, $2, $4, $7, NULL);
+    }
+    | ext_type T_IDENT T_LBRACKET T_NUM T_RBRACKET T_LBRACKET T_NUM T_RBRACKET T_ASSIGN T_LBRACE array2d_init_list T_RBRACE T_SEMI {
+        $$ = make_array2d_decl_node($1, $2, $4, $7, $11);
+    }
+    | T_INT_TYPE T_LPAREN T_STAR T_IDENT T_RPAREN T_LPAREN fn_ptr_param_list T_RPAREN T_SEMI {
+        $$ = make_func_ptr_vardecl_node(TYPE_INT, $4, $7, NULL);
+    }
+    | T_INT_TYPE T_LPAREN T_STAR T_IDENT T_RPAREN T_LPAREN fn_ptr_param_list T_RPAREN T_ASSIGN expr T_SEMI {
+        $$ = make_func_ptr_vardecl_node(TYPE_INT, $4, $7, $10);
+    }
+    | T_VOID T_LPAREN T_STAR T_IDENT T_RPAREN T_LPAREN fn_ptr_param_list T_RPAREN T_SEMI {
+        $$ = make_func_ptr_vardecl_node(TYPE_VOID, $4, $7, NULL);
+    }
+    | T_VOID T_LPAREN T_STAR T_IDENT T_RPAREN T_LPAREN fn_ptr_param_list T_RPAREN T_ASSIGN expr T_SEMI {
+        $$ = make_func_ptr_vardecl_node(TYPE_VOID, $4, $7, $10);
+    }
+    | T_DOUBLE_TYPE T_LPAREN T_STAR T_IDENT T_RPAREN T_LPAREN fn_ptr_param_list T_RPAREN T_SEMI {
+        $$ = make_func_ptr_vardecl_node(TYPE_DOUBLE, $4, $7, NULL);
+    }
+    | T_DOUBLE_TYPE T_LPAREN T_STAR T_IDENT T_RPAREN T_LPAREN fn_ptr_param_list T_RPAREN T_ASSIGN expr T_SEMI {
+        $$ = make_func_ptr_vardecl_node(TYPE_DOUBLE, $4, $7, $10);
+    }
+    | ext_type T_LPAREN T_STAR T_IDENT T_RPAREN T_LPAREN fn_ptr_param_list T_RPAREN T_SEMI {
+        $$ = make_func_ptr_vardecl_node($1, $4, $7, NULL);
+    }
+    | ext_type T_LPAREN T_STAR T_IDENT T_RPAREN T_LPAREN fn_ptr_param_list T_RPAREN T_ASSIGN expr T_SEMI {
+        $$ = make_func_ptr_vardecl_node($1, $4, $7, $10);
+    }
+    | T_DOUBLE_TYPE T_IDENT T_LBRACKET T_NUM T_RBRACKET T_ASSIGN T_LBRACE expr_list T_RBRACE T_SEMI {
+        $$ = make_array_decl_node(TYPE_DOUBLE, $2, $4, $8);
+    }
+    | T_DOUBLE_TYPE T_IDENT T_LBRACKET T_RBRACKET T_ASSIGN T_LBRACE expr_list T_RBRACE T_SEMI {
+        $$ = make_array_decl_node(TYPE_DOUBLE, $2, -1, $7);
+    }
+    | T_DOUBLE_TYPE T_IDENT T_LBRACKET T_NUM T_RBRACKET T_SEMI {
+        $$ = make_array_decl_node(TYPE_DOUBLE, $2, $4, NULL);
+    }
+    | T_STR_TYPE T_IDENT T_LBRACKET T_NUM T_RBRACKET T_ASSIGN T_LBRACE expr_list T_RBRACE T_SEMI {
+        $$ = make_array_decl_node(TYPE_STR, $2, $4, $8);
+    }
+    | T_STR_TYPE T_IDENT T_LBRACKET T_RBRACKET T_ASSIGN T_LBRACE expr_list T_RBRACE T_SEMI {
+        $$ = make_array_decl_node(TYPE_STR, $2, -1, $7);
+    }
+    | T_STR_TYPE T_IDENT T_LBRACKET T_NUM T_RBRACKET T_SEMI {
+        $$ = make_array_decl_node(TYPE_STR, $2, $4, NULL);
+    }
+    | T_CONST T_INT_TYPE T_IDENT T_ASSIGN expr T_SEMI {
+        $$ = make_vardecl_node(TYPE_INT, $3, $5);
+        $$->is_const = 1;
+    }
+    | T_CONST T_DOUBLE_TYPE T_IDENT T_ASSIGN expr T_SEMI {
+        $$ = make_vardecl_node(TYPE_DOUBLE, $3, $5);
+        $$->is_const = 1;
+    }
+    | T_CONST T_STR_TYPE T_IDENT T_ASSIGN expr T_SEMI {
+        $$ = make_vardecl_node(TYPE_STR, $3, $5);
+        $$->is_const = 1;
+    }
+    | T_CONST T_VAR_TYPE T_IDENT T_ASSIGN expr T_SEMI {
+        $$ = make_vardecl_node(TYPE_VAR, $3, $5);
+        $$->is_const = 1;
+    }
+    | T_CONST T_USER_TYPE T_IDENT T_ASSIGN expr T_SEMI {
+        int found = 0;
+        GincType bt = resolve_type_alias($2, &found);
+        $$ = make_vardecl_node(found ? bt : TYPE_INT, $3, $5);
+        $$->is_const = 1;
+    }
+    | T_CHAR T_IDENT T_SEMI {
+        $$ = make_vardecl_node(TYPE_CHAR, $2, NULL);
+    }
+    | T_CHAR T_IDENT T_ASSIGN expr T_SEMI {
+        $$ = make_vardecl_node(TYPE_CHAR, $2, $4);
+    }
+    | T_CONST T_CHAR T_IDENT T_ASSIGN expr T_SEMI {
+        $$ = make_vardecl_node(TYPE_CHAR, $3, $5);
+        $$->is_const = 1;
+    }
+    | ext_type T_IDENT T_SEMI {
+        $$ = make_vardecl_node($1, $2, NULL);
+    }
+    | ext_type T_IDENT T_ASSIGN expr T_SEMI {
+        $$ = make_vardecl_node($1, $2, $4);
+    }
+    | T_CONST ext_type T_IDENT T_ASSIGN expr T_SEMI {
+        $$ = make_vardecl_node($2, $3, $5);
+        $$->is_const = 1;
+    }
+    | ext_type T_IDENT T_LBRACKET T_NUM T_RBRACKET T_ASSIGN T_LBRACE expr_list T_RBRACE T_SEMI {
+        $$ = make_array_decl_node($1, $2, $4, $8);
+    }
+    | ext_type T_IDENT T_LBRACKET T_RBRACKET T_ASSIGN T_LBRACE expr_list T_RBRACE T_SEMI {
+        $$ = make_array_decl_node($1, $2, -1, $7);
+    }
+    | ext_type T_IDENT T_LBRACKET T_NUM T_RBRACKET T_SEMI {
+        $$ = make_array_decl_node($1, $2, $4, NULL);
+    }
+    | T_CHAR T_IDENT T_LBRACKET T_NUM T_RBRACKET T_ASSIGN T_LBRACE expr_list T_RBRACE T_SEMI {
+        $$ = make_array_decl_node(TYPE_CHAR, $2, $4, $8);
+    }
+    | T_CHAR T_IDENT T_LBRACKET T_RBRACKET T_ASSIGN T_LBRACE expr_list T_RBRACE T_SEMI {
+        $$ = make_array_decl_node(TYPE_CHAR, $2, -1, $7);
+    }
+    | T_CHAR T_IDENT T_LBRACKET T_NUM T_RBRACKET T_SEMI {
+        $$ = make_array_decl_node(TYPE_CHAR, $2, $4, NULL);
+    }
+    | T_INT_TYPE T_STAR T_IDENT T_SEMI {
+        $$ = make_ptr_vardecl_node(TYPE_INT, $3, NULL);
+    }
+    | T_INT_TYPE T_STAR T_IDENT T_ASSIGN expr T_SEMI {
+        $$ = make_ptr_vardecl_node(TYPE_INT, $3, $5);
+    }
+    | T_DOUBLE_TYPE T_STAR T_IDENT T_SEMI {
+        $$ = make_ptr_vardecl_node(TYPE_DOUBLE, $3, NULL);
+    }
+    | T_DOUBLE_TYPE T_STAR T_IDENT T_ASSIGN expr T_SEMI {
+        $$ = make_ptr_vardecl_node(TYPE_DOUBLE, $3, $5);
+    }
+    | T_CHAR T_STAR T_IDENT T_SEMI {
+        $$ = make_ptr_vardecl_node(TYPE_CHAR, $3, NULL);
+    }
+    | T_CHAR T_STAR T_IDENT T_ASSIGN expr T_SEMI {
+        $$ = make_ptr_vardecl_node(TYPE_CHAR, $3, $5);
+    }
+    | ext_type T_STAR T_IDENT T_SEMI {
+        $$ = make_ptr_vardecl_node($1, $3, NULL);
+    }
+    | ext_type T_STAR T_IDENT T_ASSIGN expr T_SEMI {
+        $$ = make_ptr_vardecl_node($1, $3, $5);
+    }
+    | T_VOID T_STAR T_IDENT T_SEMI {
+        $$ = make_ptr_vardecl_node(TYPE_VOID, $3, NULL);
+    }
+    | T_VOID T_STAR T_IDENT T_ASSIGN expr T_SEMI {
+        $$ = make_ptr_vardecl_node(TYPE_VOID, $3, $5);
+    }
     | T_INT_TYPE T_IDENT T_SEMI {
         $$ = make_vardecl_node(TYPE_INT, $2, NULL);
     }
@@ -348,6 +649,9 @@ stmt:
     }
     | T_DOUBLE_TYPE T_IDENT T_ASSIGN expr T_SEMI {
         $$ = make_vardecl_node(TYPE_DOUBLE, $2, $4);
+    }
+    | T_VAR_TYPE T_IDENT T_ASSIGN expr T_SEMI {
+        $$ = make_vardecl_node(TYPE_VAR, $2, $4);
     }
     | T_FILE T_STAR T_IDENT T_ASSIGN expr T_SEMI {
         $$ = make_vardecl_node(TYPE_FILE, $3, $5);
@@ -382,9 +686,88 @@ stmt:
     | T_FOR T_LPAREN for_init T_SEMI opt_expr T_SEMI opt_expr T_RPAREN stmt {
         $$ = make_for_node($3, $5, $7, $9);
     }
-    | expr T_SEMI {
+    | T_SWITCH T_LPAREN expr T_RPAREN T_LBRACE case_list T_RBRACE {
+        $$ = make_switch_node($3, $6);
+    }
+    | T_IDENT T_STAR T_IDENT T_SEMI {
+        $$ = make_class_var_decl_node($1, $3);
+    }
+    | T_STATIC T_INT_TYPE T_IDENT T_SEMI {
+        $$ = make_vardecl_node(TYPE_INT, $3, NULL);
+        $$->is_static = 1;
+    }
+    | T_STATIC T_INT_TYPE T_IDENT T_ASSIGN expr T_SEMI {
+        $$ = make_vardecl_node(TYPE_INT, $3, $5);
+        $$->is_static = 1;
+    }
+    | T_STATIC T_DOUBLE_TYPE T_IDENT T_ASSIGN expr T_SEMI {
+        $$ = make_vardecl_node(TYPE_DOUBLE, $3, $5);
+        $$->is_static = 1;
+    }
+    | T_STATIC ext_type T_IDENT T_ASSIGN expr T_SEMI {
+        $$ = make_vardecl_node($2, $3, $5);
+        $$->is_static = 1;
+    }
+    | T_STATIC T_INT_TYPE T_IDENT T_LPAREN param_list T_RPAREN func_body {
+        $$ = make_func_decl_node(TYPE_INT, $3, $5, $7);
+    }
+    | T_STATIC T_VOID T_IDENT T_LPAREN param_list T_RPAREN func_body {
+        $$ = make_func_decl_node(TYPE_VOID, $3, $5, $7);
+    }
+    | T_STATIC ext_type T_IDENT T_LPAREN param_list T_RPAREN func_body {
+        $$ = make_func_decl_node($2, $3, $5, $7);
+    }
+    | T_EXTERN T_INT_TYPE T_IDENT T_LPAREN param_list T_RPAREN T_SEMI {
+        $$ = make_func_decl_node(TYPE_INT, $3, $5, NULL);
+    }
+    | T_EXTERN T_VOID T_IDENT T_LPAREN param_list T_RPAREN T_SEMI {
+        $$ = make_func_decl_node(TYPE_VOID, $3, $5, NULL);
+    }
+    | T_EXTERN T_DOUBLE_TYPE T_IDENT T_LPAREN param_list T_RPAREN T_SEMI {
+        $$ = make_func_decl_node(TYPE_DOUBLE, $3, $5, NULL);
+    }
+    | T_EXTERN T_CHAR T_STAR T_IDENT T_LPAREN param_list T_RPAREN T_SEMI {
+        ASTNode* fn = make_func_decl_node(TYPE_PTR, $4, $6, NULL);
+        fn->ptr_target_type = TYPE_CHAR;
+        $$ = fn;
+    }
+    | T_EXTERN T_VOID T_STAR T_IDENT T_LPAREN param_list T_RPAREN T_SEMI {
+        ASTNode* fn = make_func_decl_node(TYPE_PTR, $4, $6, NULL);
+        fn->ptr_target_type = TYPE_VOID;
+        $$ = fn;
+    }
+    | T_EXTERN T_FILE T_STAR T_IDENT T_LPAREN param_list T_RPAREN T_SEMI {
+        $$ = make_func_decl_node(TYPE_FILE, $4, $6, NULL);
+    }
+    | T_EXTERN ext_type T_IDENT T_LPAREN param_list T_RPAREN T_SEMI {
+        $$ = make_func_decl_node($2, $3, $5, NULL);
+    }
+    | T_GOTO T_IDENT T_SEMI {
+        $$ = make_goto_node($2);
+    }
+    | T_VA_LIST T_IDENT T_SEMI {
+        $$ = make_vardecl_node(TYPE_VA_LIST, $2, NULL);
+    }
+    | T_VA_START T_LPAREN T_IDENT T_COMMA T_IDENT T_RPAREN T_SEMI {
+        $$ = make_va_start_node($3, $5);
+    }
+    | T_VA_END T_LPAREN T_IDENT T_RPAREN T_SEMI {
+        $$ = make_va_end_node($3);
+    }
+    | T_IDENT T_COLON stmt {
+        $$ = make_label_node($1, $3);
+    }
+    | T_SEMI {
+        $$ = NULL;
+    }
+    | comma_expr T_SEMI {
         $$ = $1;
     }
+    ;
+
+comma_expr:
+    expr { $$ = $1; }
+    | comma_expr T_COMMA expr { $$ = make_binop_node(AST_COMMA, $1, $3); }
     ;
 
 expr:
@@ -392,12 +775,51 @@ expr:
     | T_DEC T_IDENT { $$ = make_binop_node(AST_ASSIGN, make_var_node($2), make_binop_node(AST_SUB, make_var_node($2), make_num_node(1))); }
     | T_IDENT T_INC { $$ = make_unary_node(AST_POST_INC, make_var_node($1)); }
     | T_IDENT T_DEC { $$ = make_unary_node(AST_POST_DEC, make_var_node($1)); }
-    | T_IDENT T_ASSIGN expr { $$ = make_binop_node(AST_ASSIGN, make_var_node($1), $3); }
+    | expr T_ASSIGN expr { $$ = make_binop_node(AST_ASSIGN, $1, $3); }
+    | T_AMP expr %prec UAMP { $$ = make_unary_node(AST_ADDR_OF, $2); }
+    | T_STAR expr %prec USTAR { $$ = make_unary_node(AST_DEREF, $2); }
+    | T_LPAREN T_INT_TYPE T_RPAREN expr %prec UMINUS { $$ = make_cast_node(TYPE_INT, $4); }
+    | T_LPAREN T_DOUBLE_TYPE T_RPAREN expr %prec UMINUS { $$ = make_cast_node(TYPE_DOUBLE, $4); }
+    | T_LPAREN T_CHAR T_RPAREN expr %prec UMINUS { $$ = make_cast_node(TYPE_CHAR, $4); }
+    | T_LPAREN ext_type T_RPAREN expr %prec UMINUS { $$ = make_cast_node($2, $4); }
+    | T_IDENT T_ADD_ASSIGN expr { $$ = make_binop_node(AST_ASSIGN, make_var_node($1), make_binop_node(AST_ADD, make_var_node($1), $3)); }
+    | T_IDENT T_SUB_ASSIGN expr { $$ = make_binop_node(AST_ASSIGN, make_var_node($1), make_binop_node(AST_SUB, make_var_node($1), $3)); }
+    | T_IDENT T_MUL_ASSIGN expr { $$ = make_binop_node(AST_ASSIGN, make_var_node($1), make_binop_node(AST_MUL, make_var_node($1), $3)); }
+    | T_IDENT T_DIV_ASSIGN expr { $$ = make_binop_node(AST_ASSIGN, make_var_node($1), make_binop_node(AST_DIV, make_var_node($1), $3)); }
+    | T_IDENT T_MOD_ASSIGN expr { $$ = make_binop_node(AST_ASSIGN, make_var_node($1), make_binop_node(AST_MOD, make_var_node($1), $3)); }
+    | T_IDENT T_AND_ASSIGN expr { $$ = make_binop_node(AST_ASSIGN, make_var_node($1), make_binop_node(AST_BIT_AND, make_var_node($1), $3)); }
+    | T_IDENT T_OR_ASSIGN expr { $$ = make_binop_node(AST_ASSIGN, make_var_node($1), make_binop_node(AST_BIT_OR, make_var_node($1), $3)); }
+    | T_IDENT T_XOR_ASSIGN expr { $$ = make_binop_node(AST_ASSIGN, make_var_node($1), make_binop_node(AST_BIT_XOR, make_var_node($1), $3)); }
+    | T_IDENT T_LSHIFT_ASSIGN expr { $$ = make_binop_node(AST_ASSIGN, make_var_node($1), make_binop_node(AST_LSHIFT, make_var_node($1), $3)); }
+    | T_IDENT T_RSHIFT_ASSIGN expr { $$ = make_binop_node(AST_ASSIGN, make_var_node($1), make_binop_node(AST_RSHIFT, make_var_node($1), $3)); }
+    | expr T_QUESTION expr T_COLON expr { $$ = make_ternary_node($1, $3, $5); }
     | T_IDENT T_DOT T_IDENT T_ASSIGN expr { $$ = make_index_assign_node($1, make_string_node($3), $5); }
+    | T_IDENT T_LBRACKET expr T_RBRACKET T_LBRACKET expr T_RBRACKET T_ASSIGN expr { $$ = make_index2d_assign_node($1, $3, $6, $9); }
     | T_IDENT T_LBRACKET expr T_RBRACKET T_ASSIGN expr { $$ = make_index_assign_node($1, $3, $6); }
     | T_NUM { $$ = make_num_node($1); }
     | T_FLOAT_LITERAL { $$ = make_float_node($1); }
-    | T_LPAREN expr T_RPAREN { $$ = $2; }
+    | T_LPAREN comma_expr T_RPAREN { $$ = $2; }
+    | T_SIZEOF T_LPAREN T_INT_TYPE T_RPAREN { $$ = make_sizeof_type_node(TYPE_INT); }
+    | T_SIZEOF T_LPAREN T_CHAR T_RPAREN { $$ = make_sizeof_type_node(TYPE_CHAR); }
+    | T_SIZEOF T_LPAREN T_DOUBLE_TYPE T_RPAREN { $$ = make_sizeof_type_node(TYPE_DOUBLE); }
+    | T_SIZEOF T_LPAREN ext_type T_RPAREN { $$ = make_sizeof_type_node($3); }
+    | T_SIZEOF T_LPAREN T_USER_TYPE T_RPAREN {
+        int found = 0;
+        GincType bt = resolve_type_alias($3, &found);
+        $$ = make_sizeof_type_node(found ? bt : TYPE_INT);
+    }
+    | T_SIZEOF T_LPAREN T_USER_TYPE T_STAR T_RPAREN { $$ = make_sizeof_type_node(TYPE_PTR); }
+    | T_SIZEOF T_LPAREN T_INT_TYPE T_STAR T_RPAREN { $$ = make_sizeof_type_node(TYPE_PTR); }
+    | T_SIZEOF T_LPAREN T_CHAR T_STAR T_RPAREN { $$ = make_sizeof_type_node(TYPE_PTR); }
+    | T_SIZEOF T_LPAREN T_VOID T_STAR T_RPAREN { $$ = make_sizeof_type_node(TYPE_PTR); }
+    | T_SIZEOF T_LPAREN expr T_RPAREN { $$ = make_sizeof_expr_node($3); }
+    | T_VA_ARG T_LPAREN T_IDENT T_COMMA T_INT_TYPE T_RPAREN { $$ = make_va_arg_node($3, TYPE_INT); }
+    | T_VA_ARG T_LPAREN T_IDENT T_COMMA T_DOUBLE_TYPE T_RPAREN { $$ = make_va_arg_node($3, TYPE_DOUBLE); }
+    | T_VA_ARG T_LPAREN T_IDENT T_COMMA T_CHAR T_RPAREN { $$ = make_va_arg_node($3, TYPE_CHAR); }
+    | T_VA_ARG T_LPAREN T_IDENT T_COMMA T_CHAR T_STAR T_RPAREN { $$ = make_va_arg_node($3, TYPE_PTR); }
+    | T_VA_ARG T_LPAREN T_IDENT T_COMMA T_VOID T_STAR T_RPAREN { $$ = make_va_arg_node($3, TYPE_PTR); }
+    | T_VA_ARG T_LPAREN T_IDENT T_COMMA T_STR_TYPE T_RPAREN { $$ = make_va_arg_node($3, TYPE_STR); }
+    | T_VA_ARG T_LPAREN T_IDENT T_COMMA ext_type T_RPAREN { $$ = make_va_arg_node($3, $5); }
     | T_TRUE { $$ = make_num_node(1); }
     | T_FALSE { $$ = make_num_node(0); }
     | T_NULL { $$ = make_unary_node(AST_NULL, NULL); }
@@ -406,14 +828,26 @@ expr:
     | T_REGEX { $$ = make_regex_node($1); }
     | T_IDENT T_LPAREN expr_list T_RPAREN { $$ = make_func_call_node($1, $3); }
     | T_IDENT T_LPAREN T_RPAREN { $$ = make_func_call_node($1, NULL); }
+    | T_LPAREN T_STAR T_IDENT T_RPAREN T_LPAREN expr_list T_RPAREN { $$ = make_func_call_node($3, $6); }
+    | T_LPAREN T_STAR T_IDENT T_RPAREN T_LPAREN T_RPAREN { $$ = make_func_call_node($3, NULL); }
+    | T_LBRACKET T_RBRACKET T_LPAREN param_list T_RPAREN T_LBRACE stmt_list T_RBRACE { $$ = make_lambda_node(TYPE_INT, $4, $7); }
+    | T_LBRACKET T_RBRACKET T_LPAREN param_list T_RPAREN T_ARROW T_INT_TYPE T_LBRACE stmt_list T_RBRACE { $$ = make_lambda_node(TYPE_INT, $4, $9); }
+    | T_LBRACKET T_RBRACKET T_LPAREN param_list T_RPAREN T_ARROW T_DOUBLE_TYPE T_LBRACE stmt_list T_RBRACE { $$ = make_lambda_node(TYPE_DOUBLE, $4, $9); }
+    | T_LBRACKET T_RBRACKET T_LPAREN param_list T_RPAREN T_ARROW T_VOID T_LBRACE stmt_list T_RBRACE { $$ = make_lambda_node(TYPE_VOID, $4, $9); }
     | T_IDENT T_DOT T_IDENT T_LPAREN expr_list T_RPAREN { $$ = make_method_call_node($1, $3, $5); }
     | T_IDENT T_DOT T_IDENT T_LPAREN T_RPAREN { $$ = make_method_call_node($1, $3, NULL); }
     | T_IDENT T_DOT T_IDENT { $$ = make_array_access_node($1, make_string_node($3)); }
+    | T_IDENT T_ARROW T_IDENT T_ASSIGN expr { $$ = make_index_assign_node($1, make_string_node($3), $5); }
+    | T_IDENT T_ARROW T_IDENT T_LPAREN expr_list T_RPAREN { $$ = make_method_call_node($1, $3, $5); }
+    | T_IDENT T_ARROW T_IDENT T_LPAREN T_RPAREN { $$ = make_method_call_node($1, $3, NULL); }
+    | T_IDENT T_ARROW T_IDENT { $$ = make_array_access_node($1, make_string_node($3)); }
+    | T_IDENT T_LBRACKET expr T_RBRACKET T_LBRACKET expr T_RBRACKET { $$ = make_array2d_access_node($1, $3, $6); }
     | T_IDENT T_LBRACKET expr T_RBRACKET { $$ = make_array_access_node($1, $3); }
     | T_IDENT { $$ = make_var_node($1); }
     | expr T_OR expr { $$ = make_binop_node(AST_LOGICAL_OR, $1, $3); }
     | expr T_AND expr { $$ = make_binop_node(AST_LOGICAL_AND, $1, $3); }
     | T_NOT expr %prec T_NOT { $$ = make_unary_node(AST_LOGICAL_NOT, $2); }
+    | T_TILDE expr %prec T_TILDE { $$ = make_unary_node(AST_BIT_NOT, $2); }
     | expr T_MATCH expr { $$ = make_binop_node(AST_MATCH, $1, $3); }
     | expr T_EQ expr { $$ = make_binop_node(AST_EQ, $1, $3); }
     | expr T_NEQ expr { $$ = make_binop_node(AST_NEQ, $1, $3); }

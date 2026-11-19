@@ -1,0 +1,29 @@
+#!/usr/bin/env ginc
+
+// 1. void 型と (void) のテスト
+void say_hello(void) {
+    print("Hello from void function!");
+    return; // 戻り値なしの return
+}
+
+say_hello();
+
+// 2. C言語の王道 main 関数のシンタックスシュガー
+int main(int argc, char *argv[]) {
+    print(argc);
+    // argvは裏側では動的配列(var)としてパースされる
+    if (argv == null) {
+        print("argv is null!");
+    }
+    return 0;
+}
+
+// 呼び出してみる
+main(1, null);
+
+// 3. FILE* 型の宣言テスト (実体はLLVMのポインタとして扱われる)
+FILE *fp;
+fp = null;
+if (fp == null) {
+    print("File pointer is null.");
+}

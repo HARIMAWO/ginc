@@ -1,0 +1,136 @@
+#!/bin/sh
+set -e
+
+PREFIX="/usr/local"
+LOCAL_MODE=0
+LOCAL_HOST_MODE=0
+DEBUG_MODE=0
+
+for arg in "$@"; do
+	case "$arg" in
+		--prefix=*)
+			PREFIX="${arg#--prefix=}"
+			;;
+		--local)
+			LOCAL_MODE=1
+			;;
+		--local-host)
+			LOCAL_HOST_MODE=1
+			;;
+		--debug)
+			DEBUG_MODE=1
+			;;
+		--help|-h)
+			echo "Usage: ./configure [options]"
+			echo "  --prefix=DIR   Install prefix (default: /usr/local)"
+			echo "  --local        Install into ~/.local/bin and ~/.local/ginc"
+			echo "  --local-host   Install into ~/.local/<hostname -s>/bin and ginc (for NFS home)"
+			echo "  --debug        Enable -fsanitize=address debug build"
+			exit 0
+			;;
+		*)
+			echo "Unknown option: $arg" >&2
+			exit 1
+			;;
+	esac
+done
+
+if [ "$LOCAL_HOST_MODE" -eq 1 ]; then
+	HOST_SHORT="$(hostname -s 2>/dev/null || uname -n | cut -d. -f1)"
+	PREFIX="$HOME/.local/$HOST_SHORT"
+	BINDIR="$PREFIX/bin"
+	INCDIR="$PREFIX/ginc/include"
+	LIBDIR="$PREFIX/ginc/lib"
+elif [ "$LOCAL_MODE" -eq 1 ]; then
+	BINDIR="$HOME/.local/bin"
+	INCDIR="$HOME/.local/ginc/include"
+	LIBDIR="$HOME/.local/ginc/lib"
+	PREFIX="$HOME/.local"
+else
+	BINDIR="$PREFIX/bin"
+	INCDIR="$PREFIX/lib/ginc/include"
+	LIBDIR="$PREFIX/lib/ginc/lib"
+fi
+
+# Detect LLVM_CONFIG
+LLVM_CONFIG=""
+for cand in llvm-config-devel llvm-config llvm-config-21 llvm-config-19 llvm-config-18; do
+	if command -v "$cand" >/dev/null 2>&1; then
+		LLVM_CONFIG="$cand"
+		break
+	fi
+done
+if [ -z "$LLVM_CONFIG" ]; then
+	echo "Error: llvm-config / llvm-config-devel not found." >&2
+	exit 1
+fi
+
+# Detect CC
+CC=""
+for cand in clang cc gcc; do
+	if command -v "$cand" >/dev/null 2>&1; then
+		CC="$cand"
+		break
+	fi
+done
+if [ -z "$CC" ]; then
+	echo "Error: C compiler (clang/cc/gcc) not found." >&2
+	exit 1
+fi
+
+RE2C="re2c"
+BISON="bison"
+command -v "$RE2C" >/dev/null 2>&1 || { echo "Error: re2c not found." >&2; exit 1; }
+command -v "$BISON" >/dev/null 2>&1 || { echo "Error: bison not found." >&2; exit 1; }
+
+EXTRA_FLAGS=""
+if [ "$DEBUG_MODE" -eq 1 ]; then
+	EXTRA_FLAGS="-fsanitize=address"
+fi
+
+# Generate src/ginc_config.h
+cat > src/ginc_config.h <<EOF
+#ifndef GINC_CONFIG_H
+#define GINC_CONFIG_H
+
+#define GINC_PREFIX "$PREFIX"
+#define GINC_DEFAULT_INCDIR "$INCDIR"
+#define GINC_DEFAULT_LIBDIR "$LIBDIR"
+
+#endif
+EOF
+
+# Generate Makefile from Makefile.in
+sed \
+	-e "s|@LLVM_CONFIG@|$LLVM_CONFIG|g" \
+	-e "s|@CC@|$CC|g" \
+	-e "s|@RE2C@|$RE2C|g" \
+	-e "s|@BISON@|$BISON|g" \
+	-e "s|@PREFIX@|$PREFIX|g" \
+	-e "s|@BINDIR@|$BINDIR|g" \
+	-e "s|@INCDIR@|$INCDIR|g" \
+	-e "s|@LIBDIR@|$LIBDIR|g" \
+	Makefile.in > Makefile
+
+# Strip BSD-only .if block and apply debug flag if requested
+awk '
+	/^\.if / { skip=1; next }
+	/^\.endif/ { skip=0; next }
+	!skip { print }
+' Makefile > Makefile.tmp && mv Makefile.tmp Makefile
+
+if [ -n "$EXTRA_FLAGS" ]; then
+	sed -e "s|CFLAGS = -g -Wall|CFLAGS = -g -Wall $EXTRA_FLAGS|" \
+	    -e "s|LDFLAGS = -Wl,-export-dynamic|LDFLAGS = $EXTRA_FLAGS -Wl,-export-dynamic|" \
+	    Makefile > Makefile.tmp && mv Makefile.tmp Makefile
+fi
+
+echo "Configured GINC:"
+echo "  CC          = $CC"
+echo "  LLVM_CONFIG = $LLVM_CONFIG"
+echo "  PREFIX      = $PREFIX"
+echo "  BINDIR      = $BINDIR"
+echo "  INCDIR      = $INCDIR"
+echo "  LIBDIR      = $LIBDIR"
+echo "  DEBUG       = $DEBUG_MODE"
+echo "Run 'make' and 'make install'."

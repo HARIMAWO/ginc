@@ -1,0 +1,9 @@
+#!/usr/bin/env ginc
+
+// 1. 正常な typedef のテスト
+typedef int my_int;
+my_int x = 42;
+print(x);
+
+// 2. 予約語を type 宣言しようとした場合の異常系テスト（コンパイルエラーになるべき）
+typedef int try;

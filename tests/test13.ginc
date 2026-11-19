@@ -1,0 +1,20 @@
+#!/usr/bin/env ginc
+
+// C++ライクな function-try-block と finally の融合！
+int process_data(int val) try {
+    print(100);
+    if (val < 0) {
+        throw 999; // 例外発生！
+    }
+    print(200);
+    return val;
+} finally {
+    print(777); // throwされても絶対にクリーンアップが走る
+}
+
+try {
+    int res = process_data(-5);
+} catch (int e) {
+    print(8888); // 呼び出し元でキャッチ
+    print(e);    // 999
+}

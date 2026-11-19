@@ -1,0 +1,22 @@
+#!/usr/bin/env ginc
+
+class Exception {
+    int code;
+    str message;
+};
+
+int process() try {
+    throw 404;
+} finally {
+    print(777);
+}
+
+try {
+    process();
+} catch (Exception ex) { // クラス型でのキャッチ
+    print(ex.message);
+} catch (int code) {     // 整数型でのキャッチ
+    print(code);
+} catch (var v) {        // バリアント型（何でも）でのキャッチ
+    print(v);
+}

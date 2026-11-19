@@ -1,0 +1,81 @@
+LLVM_CONFIG = @LLVM_CONFIG@
+LLVM_CFLAGS = `$(LLVM_CONFIG) --cflags`
+LLVM_LDFLAGS = `$(LLVM_CONFIG) --ldflags --libs core analysis executionengine mcjit native` -lpthread -lz -lm
+
+CC = @CC@
+RE2C = @RE2C@
+BISON = @BISON@
+
+PREFIX = @PREFIX@
+BINDIR = @BINDIR@
+INCDIR = @INCDIR@
+LIBDIR = @LIBDIR@
+
+CFLAGS = -g -Wall -fPIC -I./src $(LLVM_CFLAGS)
+LDFLAGS = -Wl,-export-dynamic $(LLVM_LDFLAGS)
+
+.if defined(DEBUG) && $(DEBUG) == 1
+# BSD make fallback handled by configure; generic flags below
+.endif
+
+CORE_OBJS = src/lexer.o src/parser.o src/ast.o src/codegen.o src/runtime.o src/cpp.o src/ginc_api.o
+
+all: ginc libginc.a libginc.so std/libginc_std.so
+
+libginc.a: $(CORE_OBJS)
+	ar rcs libginc.a $(CORE_OBJS)
+
+libginc.so: $(CORE_OBJS)
+	$(CC) -shared -o libginc.so $(CORE_OBJS) $(LLVM_LDFLAGS)
+
+ginc: src/main.o libginc.a
+	$(CC) -o ginc src/main.o libginc.a $(LDFLAGS)
+
+std/libginc_std.so: std/ginc_std.c
+	$(CC) -shared -fPIC -Wall -o std/libginc_std.so std/ginc_std.c -lm
+
+src/parser.c src/parser.h: src/parser.y
+	$(BISON) -d -o src/parser.c src/parser.y
+
+src/lexer.c: src/lexer.re src/parser.h
+	$(RE2C) -o src/lexer.c src/lexer.re
+
+src/lexer.o: src/lexer.c src/parser.h
+	$(CC) $(CFLAGS) -c -o src/lexer.o src/lexer.c
+
+src/parser.o: src/parser.c src/ast.h src/parser.h
+	$(CC) $(CFLAGS) -c -o src/parser.o src/parser.c
+
+src/main.o: src/main.c src/ginc.h
+	$(CC) $(CFLAGS) -c -o src/main.o src/main.c
+
+src/ginc_api.o: src/ginc_api.c src/ginc.h src/ast.h src/codegen.h src/cpp.h src/ginc_config.h
+	$(CC) $(CFLAGS) -c -o src/ginc_api.o src/ginc_api.c
+
+src/ast.o: src/ast.c src/ast.h
+	$(CC) $(CFLAGS) -c -o src/ast.o src/ast.c
+
+src/codegen.o: src/codegen.c src/codegen.h src/ast.h
+	$(CC) $(CFLAGS) -c -o src/codegen.o src/codegen.c
+
+src/runtime.o: src/runtime.c src/ginc_config.h
+	$(CC) $(CFLAGS) -c -o src/runtime.o src/runtime.c
+
+src/cpp.o: src/cpp.c src/cpp.h
+	$(CC) $(CFLAGS) -c -o src/cpp.o src/cpp.c
+
+install: all
+	mkdir -p "$(BINDIR)" "$(INCDIR)" "$(LIBDIR)"
+	install -m 755 ginc "$(BINDIR)/ginc"
+	install -m 755 libginc.so "$(LIBDIR)/libginc.so"
+	install -m 644 libginc.a "$(LIBDIR)/libginc.a"
+	install -m 644 src/ginc.h "$(INCDIR)/ginc.h"
+	install -m 755 std/libginc_std.so "$(LIBDIR)/libginc_std.so"
+	install -m 644 std/*.h "$(INCDIR)/"
+
+uninstall:
+	rm -f "$(BINDIR)/ginc" "$(LIBDIR)/libginc.so" "$(LIBDIR)/libginc.a" "$(LIBDIR)/libginc_std.so"
+	rm -rf "$(INCDIR)"
+
+clean:
+	rm -f ginc libginc.a libginc.so std/libginc_std.so src/*.o src/lexer.c src/parser.c src/parser.h

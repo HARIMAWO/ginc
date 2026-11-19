@@ -1,0 +1,11 @@
+#!/usr/bin/env ginc
+
+int helper(int x) {
+	return x * 2;
+}
+
+int main(void) {
+	int v = helper(21);
+	print(v);
+	return v;
+}

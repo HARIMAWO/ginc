@@ -1,0 +1,68 @@
+#!/usr/bin/env ginc
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdint.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <ctype.h>
+#include <time.h>
+
+int main(void) {
+	// 1. stdint.h / stdbool.h / stddef.h
+	int64_t big = 10000000000;
+	uint32_t u = 42;
+	size_t sz = sizeof(int64_t);
+	bool ok = true;
+	printf("big=%lld u=%d sz=%ld ok=%d\n", big, u, sz, ok);
+
+	// 2. string.h 拡張 (strcat, strstr, strdup, memcpy, memset, memcmp)
+	char buf[64];
+	memset(buf, 0, 64);
+	strcpy(buf, "hello");
+	strcat(buf, "_world");
+	printf("buf=%s\n", buf);
+
+	char* sub = strstr(buf, "world");
+	if (sub != NULL) {
+		printf("sub=%s\n", sub);
+	}
+
+	char* dup = strdup(buf);
+	printf("dup=%s cmp=%d\n", dup, memcmp(buf, dup, 11));
+	free(dup);
+
+	int src_arr[3] = {11, 22, 33};
+	int dst_arr[3];
+	memcpy(dst_arr, src_arr, sizeof(src_arr));
+	printf("dst=%d,%d,%d\n", dst_arr[0], dst_arr[1], dst_arr[2]);
+
+	// 3. stdio.h 拡張 (snprintf, fwrite, fseek, ftell, fread)
+	char sbuf[16];
+	snprintf(sbuf, 16, "val=%d", 99);
+	printf("sbuf=%s\n", sbuf);
+
+	FILE* fp = fopen("/tmp/ginc_bin_test.dat", "wb");
+	fwrite(src_arr, sizeof(int), 3, fp);
+	fclose(fp);
+
+	FILE* fp2 = fopen("/tmp/ginc_bin_test.dat", "rb");
+	fseek(fp2, 0, SEEK_END);
+	long fsize = ftell(fp2);
+	fseek(fp2, 0, SEEK_SET);
+	int r_arr[3];
+	int nread = fread(r_arr, sizeof(int), 3, fp2);
+	fclose(fp2);
+	printf("fsize=%ld nread=%d r=%d,%d,%d\n", fsize, nread, r_arr[0], r_arr[1], r_arr[2]);
+
+	// 4. ctype.h
+	printf("alpha=%d digit=%d upper=%c lower=%c\n",
+		isalpha('a') != 0, isdigit('7') != 0, toupper('g'), tolower('Z'));
+
+	// 5. time.h
+	time_t t = time(NULL);
+	printf("time_ok=%d\n", t > 0);
+
+	return 0;
+}

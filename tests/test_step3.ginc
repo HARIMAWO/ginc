@@ -1,0 +1,85 @@
+#!/usr/bin/env ginc
+
+// 1. プロトタイプ宣言 & 相互再帰
+int is_even(int n);
+int is_odd(int n);
+void greet(str msg);
+
+// 2. enum 定義（名前付き・無名・負数・switch 連携）
+enum Color {
+	RED,
+	GREEN = 5,
+	BLUE,
+};
+
+enum {
+	FLAG_OK = 0,
+	FLAG_ERR = -1
+};
+
+// 3. const 修飾子（グローバル・ローカル）
+const int G_MAX = 100;
+const double G_PI = 3.14;
+const str G_NAME = "GINC";
+
+// 4. グローバル配列（サイズ省略 & double/str 配列）
+int g_arr[] = {10, 20, 30};
+double g_darr[] = {1.5, 2.5};
+str g_sarr[] = {"alpha", "beta"};
+
+int is_even(int n) {
+	if (n == 0) return 1;
+	return is_odd(n - 1);
+}
+
+int is_odd(int n) {
+	if (n == 0) return 0;
+	return is_even(n - 1);
+}
+
+void greet(str msg) {
+	print(msg);
+}
+
+void test_local_arrays() {
+	int l_arr[] = {1, 2, 3, 4};
+	int l_zero[3];
+	l_zero[1] = 42;
+	print(l_arr[0] + l_arr[3]); // 5
+	print(l_zero[0]);           // 0
+	print(l_zero[1]);           // 42
+
+	const int L_CONST = 77;
+	print(L_CONST);             // 77
+}
+
+// 実行テスト
+print(is_even(4));   // 1
+print(is_odd(4));    // 0
+greet(G_NAME);       // GINC
+
+print(RED);          // 0
+print(GREEN);        // 5
+print(BLUE);         // 6
+print(FLAG_ERR);     // -1
+
+int c = BLUE;
+switch (c) {
+	case RED:
+		print(100);
+		break;
+	case BLUE:
+		print(200);
+		break;
+	default:
+		print(999);
+		break;
+} // 200
+
+print(G_MAX);        // 100
+print(G_PI);         // 3.140000
+print(g_arr[2]);     // 30
+print(g_darr[1]);    // 2.500000
+print(g_sarr[0]);    // alpha
+
+test_local_arrays(); // 5, 0, 42, 77

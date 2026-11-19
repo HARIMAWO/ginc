@@ -1,0 +1,110 @@
+#!/usr/bin/env ginc
+
+int test_basic(int v) {
+	int res = 0;
+	switch (v) {
+		case 1:
+			res = 10;
+			break;
+		case 2:
+			res = 20;
+			break;
+		case -1:
+			res = -10;
+			break;
+		default:
+			res = 99;
+			break;
+	}
+	return res;
+}
+
+print(test_basic(1));   // 10
+print(test_basic(2));   // 20
+int neg = -1;
+print(test_basic(neg)); // -10
+print(test_basic(5));   // 99
+
+// default なし・一致なし
+int no_def = 42;
+switch (no_def) {
+	case 1:
+		no_def = 1;
+		break;
+	case 2:
+		no_def = 2;
+		break;
+}
+print(no_def); // 42
+
+// 空 case 連結 & フォールスルー
+int fall = 0;
+switch (2) {
+	case 1:
+	case 2:
+		fall = fall + 10;
+	case 3:
+		fall = fall + 20;
+		break;
+	default:
+		fall = 999;
+		break;
+}
+print(fall); // 30
+
+// default が途中にあるケース
+int mid_def = 0;
+switch (100) {
+	default:
+		mid_def = mid_def + 1;
+	case 1:
+		mid_def = mid_def + 2;
+		break;
+	case 2:
+		mid_def = 500;
+		break;
+}
+print(mid_def); // 3
+
+// ネストした switch
+int nested = 0;
+switch (1) {
+	case 1:
+		switch (2) {
+			case 2:
+				nested = 77;
+				break;
+			default:
+				nested = 88;
+				break;
+		}
+		nested = nested + 1;
+		break;
+	default:
+		nested = 0;
+		break;
+}
+print(nested); // 78
+
+// ループ内 switch での break / continue
+int sum = 0;
+for (int i = 0; i < 5; i++) {
+	switch (i) {
+		case 1:
+			continue;
+		case 2:
+			sum = sum + 100;
+			break;
+		default:
+			sum = sum + i;
+			break;
+	}
+	sum = sum + 1;
+}
+// i=0: 0+1=1
+// i=1: continue -> +0
+// i=2: +100+1=101
+// i=3: +3+1=4
+// i=4: +4+1=5
+// total = 111
+print(sum); // 111

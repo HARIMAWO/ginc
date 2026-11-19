@@ -1,0 +1,33 @@
+#!/usr/bin/env ginc
+
+class Counter {
+    int count; // classのデフォルトは private!
+public:
+    // コンストラクタの代わりとなる初期化メソッド
+    int init() {
+        this.count = 0; // クラス内部からのアクセスなので許可される！
+        return 0;
+    }
+    int inc(int val) {
+        this.count = this.count + val;
+        return this.count;
+    }
+};
+
+struct Point {
+    // structのデフォルトは public!
+    int x;
+    int y;
+};
+
+class Counter c;
+c.init();  // ここで private 変数を初期化！
+c.inc(10); // 10
+print(c.inc(5)); // 15が出力されるはず
+
+struct Point p;
+p.x = 100; // publicプロパティなのでOK
+print(p.x); // 100が出力されるはず
+
+// ↓これのコメントを外すと、コンパイルエラーで弾かれるようになります！
+// c.count = 99;

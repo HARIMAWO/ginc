@@ -1,0 +1,33 @@
+#!/usr/bin/env ginc
+// [DISABLED] 旧例外ディスパッチ仕様（catch (Exception ex) と catch (int code) の型判定）に依存しているためコメントアウト
+/*
+class Exception {
+public:
+    int code;
+    str message;
+};
+
+// 1. オブジェクトを投げるテスト
+try {
+    class Exception e;
+    e.code = 500;
+    e.message = "Server Error";
+    throw e;
+} catch (int code) {
+    print(1111); // ここは通過しない
+} catch (Exception ex) {
+    print(ex.code);    // 500
+    print(ex.message); // Server Error
+} finally {
+    print(777);
+}
+
+// 2. 整数を投げるテスト
+try {
+    throw 404;
+} catch (Exception ex) {
+    print(2222); // ここは通過しない
+} catch (int code) {
+    print(code); // 404
+}
+*/

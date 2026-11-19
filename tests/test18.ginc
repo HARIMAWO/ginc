@@ -1,0 +1,20 @@
+#!/usr/bin/env ginc
+
+// クラス定義の中にメソッドを直接記述！
+class Counter {
+public:
+    int count;
+
+    int inc(int val) {
+        this.count = this.count + val;
+        return this.count;
+    }
+};
+
+// インスタンス化 (この瞬間にメソッドが自動バインドされる)
+class Counter c;
+c.count = 0;
+
+// 自動バインドされたメソッドを呼び出し！
+print(c.inc(10)); // 10
+print(c.inc(5));  // 15

@@ -1,0 +1,43 @@
+#!/usr/bin/env ginc
+
+#include <stdio.h>
+#include <stdarg.h>
+
+int sum_va(int count, ...) {
+	va_list ap;
+	va_start(ap, count);
+	int total = 0;
+	for (int i = 0; i < count; i++) {
+		total += va_arg(ap, int);
+	}
+	va_end(ap);
+	return total;
+}
+
+int main(void) {
+	// 1. printf ラッパー（GincPtr と 文字列リテラルの混在・書式指定）
+	char* msg = "hello_ginc";
+	printf("msg=%s, sub=%s, n=%d, f=%.2f, c=%c%%\n", msg, msg + 6, 42, 3.14159, 'A');
+
+	// 2. sprintf
+	char buf[64];
+	sprintf(buf, "%s:%d", "score", 100);
+	printf("buf=[%s]\n", buf);
+
+	// 3. fprintf
+	FILE* fp = fopen("/tmp/ginc_fprintf_test.txt", "w");
+	fprintf(fp, "line:%s:%d\n", msg, 7);
+	fclose(fp);
+
+	FILE* fp2 = fopen("/tmp/ginc_fprintf_test.txt", "r");
+	char rbuf[64];
+	if (fgets(rbuf, 64, fp2) != NULL) {
+		printf("read=%s", rbuf);
+	}
+	fclose(fp2);
+
+	// 4. ユーザー定義可変長引数関数 (va_list / va_start / va_arg / va_end)
+	printf("sum=%d\n", sum_va(4, 10, 20, 30, 40));
+
+	return 0;
+}

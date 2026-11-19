@@ -1,0 +1,53 @@
+#!/usr/bin/env ginc
+
+char c = 'A';
+short s = 1234;
+long l = 3000000000;
+unsigned int u = 42;
+float f = 1.5;
+bool b1 = true;
+_Bool b2 = 5; // 1 に正規化されるはず
+
+print(c);       // 65
+print(c + 1);   // 66
+print(s);       // 1234
+print(l);       // 3000000000
+print(u);       // 42
+print(f);       // 1.500000
+print(b1);      // 1
+print(b2);      // 1
+
+// 型混合演算
+long l2 = l + 100;
+print(l2);      // 3000000100
+
+double d = 2.25;
+print(f + d);   // 3.750000
+print(f < d);   // 1
+
+// const & typedef
+const char C_NL = '\n';
+print(C_NL);    // 10
+
+typedef long i64;
+i64 big = 5000000000;
+print(big);     // 5000000000
+
+// 関数引数と戻り値
+long add_long(long a, int b) {
+	return a + b;
+}
+print(add_long(big, 123)); // 5000000123
+
+bool is_positive(int x) {
+	return x > 0;
+}
+print(is_positive(10));  // 1
+print(is_positive(-3));  // 0
+
+// 配列
+char carr[] = {'X', 'Y', 'Z'};
+float farr[2];
+farr[0] = 3.5;
+print(carr[1]); // 89
+print(farr[0]); // 3.500000

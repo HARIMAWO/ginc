@@ -1,84 +1,44 @@
+#include "ginc.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "ast.h"
-#include "codegen.h"
 
-extern int yyparse();
-extern const char *cursor;
-extern const char *limit;
-extern ASTNode* root_node;
+int main(int argc, char** argv) {
+	GincEngine* eng = ginc_create();
+	int verbose = 1;
+	int script_arg_idx = -1;
 
-char const* current_filename = "<stdin>";
-int current_line = 1;
-int current_column = 1;
-
-int main(int argc, char **argv) {
-	char* buffer = NULL;
-	size_t size = 0;
-
-	if (argc > 1) {
-		current_filename = argv[1];
-
-		// ファイル先頭のShebang (#!...) をチェックし、プリプロセッサエラーを防止する
-		FILE* check_fp = fopen(argv[1], "rb");
-		int has_shebang = 0;
-		if (check_fp) {
-			char first_two[2] = {0};
-			if (fread(first_two, 1, 2, check_fp) == 2) {
-				if (first_two[0] == '#' && first_two[1] == '!') {
-					has_shebang = 1;
-				}
-			}
-			fclose(check_fp);
-		}
-
-		char cmd[1024];
-		if (has_shebang) {
-			// Shebangがある場合は1行目をスキップして標準入力経由でclang -Eに渡す
-			snprintf(cmd, sizeof(cmd), "tail -n +2 %s | clang -E -x c -", argv[1]);
+	for (int i = 1; i < argc; i++) {
+		if (strncmp(argv[i], "-I", 2) == 0) {
+			char const* dir = argv[i] + 2;
+			if (*dir == '\0' && i + 1 < argc) dir = argv[++i];
+			if (*dir) ginc_add_include_dir(eng, dir);
+		} else if (strncmp(argv[i], "-L", 2) == 0) {
+			char const* dir = argv[i] + 2;
+			if (*dir == '\0' && i + 1 < argc) dir = argv[++i];
+			if (*dir) ginc_add_lib_dir(eng, dir);
+		} else if (strcmp(argv[i], "-q") == 0 || strcmp(argv[i], "--quiet") == 0) {
+			verbose = 0;
 		} else {
-			snprintf(cmd, sizeof(cmd), "clang -E -x c %s", argv[1]);
+			script_arg_idx = i;
+			break;
 		}
+	}
 
-		FILE* pipe = popen(cmd, "r");
-		if (!pipe) {
-			fprintf(stderr, "Ga! (CPP Error): Failed to run preprocessor for '%s'\n", argv[1]);
-			return 1;
-		}
+	ginc_set_verbose(eng, verbose);
 
-		size_t capacity = 4096;
-		buffer = malloc(capacity);
-		if (!buffer) {
-			fprintf(stderr, "Ga! (Memory Error): Failed to allocate memory\n");
-			pclose(pipe);
-			return 1;
-		}
-
-		size_t nread = 0;
-		while ((nread = fread(buffer + size, 1, capacity - size, pipe)) > 0) {
-			size += nread;
-			if (size >= capacity) {
-				capacity *= 2;
-				char* new_buf = realloc(buffer, capacity);
-				if (!new_buf) {
-					fprintf(stderr, "Ga! (Memory Error): Failed to reallocate memory\n");
-					free(buffer);
-					pclose(pipe);
-					return 1;
-				}
-				buffer = new_buf;
-			}
-		}
-		pclose(pipe);
+	int ret = 0;
+	if (script_arg_idx > 0) {
+		ret = ginc_eval_file(eng, argv[script_arg_idx], argc - script_arg_idx, argv + script_arg_idx);
 	} else {
 		size_t capacity = 1024;
-		buffer = malloc(capacity);
+		size_t size = 0;
+		char* buffer = malloc(capacity);
 		if (!buffer) {
 			fprintf(stderr, "Ga! (Memory Error): Failed to allocate memory\n");
+			ginc_destroy(eng);
 			return 1;
 		}
-
 		size_t nread = 0;
 		while ((nread = fread(buffer + size, 1, capacity - size, stdin)) > 0) {
 			size += nread;
@@ -88,26 +48,17 @@ int main(int argc, char **argv) {
 				if (!new_buf) {
 					fprintf(stderr, "Ga! (Memory Error): Failed to reallocate memory\n");
 					free(buffer);
+					ginc_destroy(eng);
 					return 1;
 				}
 				buffer = new_buf;
 			}
 		}
+		buffer[size] = '\0';
+		ret = ginc_eval_string(eng, buffer, "<stdin>", argc, argv);
+		free(buffer);
 	}
 
-	buffer[size] = '\0';
-	cursor = buffer;
-	limit = buffer + size;
-
-	printf("GINC (Ga! Is Never Called) Compiler\n");
-	if (yyparse() == 0) {
-		printf("Parse successful!\n");
-		printf("--- AST Dump ---\n");
-		print_ast(root_node, 0);
-
-		generate_code(root_node);
-	}
-
-	free(buffer);
-	return 0;
+	ginc_destroy(eng);
+	return (ret != 0 && !verbose) ? ret : 0;
 }

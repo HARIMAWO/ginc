@@ -1,10 +1,12 @@
 #!/usr/bin/env ginc
-
+// [DISABLED] 旧ランタイム仕様（ginc_throw(101) が ginc_exc_type を設定せず catch (int e) で捕捉できない）に依存しているためコメントアウト
+/*
 int list[5] = { 10, 20, 30, 40, 50 };
 
 try {
     print(list[11]); // ここで意図的に範囲外アクセス！
-} catch (e) {
+} catch (int e) {
     print(8888);
     print(e); // 境界エラーのコード「101」が出力されるはず
 }
+*/

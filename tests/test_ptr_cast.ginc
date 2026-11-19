@@ -1,0 +1,48 @@
+#!/usr/bin/env ginc
+
+// 1. 明示キャスト
+print((int)3.9);         // 3
+print((double)5 / 2);    // 2.500000
+print((char)65);         // 65
+
+// 2. スカラー参照渡し (swap)
+void swap(int* a, int* b) {
+	int tmp = *a;
+	*a = *b;
+	*b = tmp;
+}
+
+int x = 10;
+int y = 20;
+swap(&x, &y);
+print(x); // 20
+print(y); // 10
+
+// 3. 配列ポインタとポインタ演算
+int arr[] = {10, 20, 30, 40, 50};
+int* p = arr;
+print(*p);        // 10
+print(*(p + 2));  // 30
+print(p[3]);      // 40
+p++;
+print(*p);        // 20
+*(p + 1) = 99;
+print(arr[2]);    // 99
+print(&arr[4] - p); // 3
+
+// 4. char* カーソルと文字列走査
+int my_strlen(char* s) {
+	int len = 0;
+	while (*s != '\0') {
+		len++;
+		s++;
+	}
+	return len;
+}
+
+char* msg = "hello";
+print(msg);            // hello
+msg++;
+print(msg);            // ello
+print(my_strlen(msg)); // 4
+print(my_strlen("world!")); // 6

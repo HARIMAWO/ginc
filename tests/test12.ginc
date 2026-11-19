@@ -1,0 +1,20 @@
+#!/usr/bin/env ginc
+
+class Exception e;
+e.code = 404;
+e.message = "Not Found";
+
+// 1. アンラップのテスト (GincValue から int への変換)
+int error_code = e.code;
+print(error_code); // 404が出力される
+
+// 2. finally のテスト
+try {
+    print(111);
+    throw 999;
+    print(222); // 実行されない
+} catch (int err) {
+    print(err); // 999
+} finally {
+    print(777); // 絶対に実行される
+}

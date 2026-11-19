@@ -1,0 +1,13 @@
+#!/usr/bin/env ginc
+
+// 1. クラスの定義（スキーマ）テスト
+class Exception {
+    int code;
+    str message;
+    var data; // 何でも入れられるバリアント型
+};
+
+// 2. var型の連想配列の宣言テスト（※今回はパースのみの確認）
+var dict[str];
+
+print(111); // AST構築後、正常に実行完了するか確認

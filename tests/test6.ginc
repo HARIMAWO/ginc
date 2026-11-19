@@ -11,7 +11,7 @@ try {
     print(111);
     int result = safe_func(-5); // ここで例外発生
     print(result); // ここは実行されない
-} catch (e) {
+} catch (int e) {
     print(8888); // エラー処理
     print(e);    // 999 が出力される
 }

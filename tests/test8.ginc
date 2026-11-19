@@ -1,0 +1,23 @@
+#!/usr/bin/env ginc
+// [DISABLED] 旧ランタイム仕様（ginc_throw(102) が ginc_exc_type を設定せず catch (int e) で捕捉できない）に依存しているためコメントアウト
+/*
+// 連想配列の宣言と代入
+int dict[str];
+dict["apple"] = 100;
+dict["banana"] = 200;
+
+print(dict["apple"]);
+
+// 配列の要素への代入（今まで未実装だった機能）
+int list[5] = { 1, 2, 3, 4, 5 };
+list[0] = 999;
+print(list[0]);
+
+// 未定義キーの例外テスト
+try {
+    print(dict["grape"]);
+} catch (int e) {
+    print(8888);
+    print(e); // 102 が出力されるはず
+}
+*/

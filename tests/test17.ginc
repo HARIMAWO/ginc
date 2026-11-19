@@ -1,0 +1,16 @@
+#!/usr/bin/env ginc
+
+// 第一引数に「var this」を受け取る関数を定義
+int increment(var this, int val) {
+    this.count = this.count + val;
+    return this.count;
+}
+
+class Counter c;
+c.count = 0;
+// オブジェクトに関数をバインド
+c.inc = increment;
+
+// メソッドとして呼び出す（暗黙的に c.inc(c, 10) として第一引数に c が渡される！）
+print(c.inc(10)); // 10
+print(c.inc(5));  // 15

@@ -1,0 +1,18 @@
+#!/usr/bin/env ginc
+
+// 普通の関数
+int double_val(int a) {
+    return a * 2;
+}
+int add_vals(int a, int b) {
+    return a + b;
+}
+
+// ハッシュマップ(オブジェクト)に直接関数を代入する！
+var obj[str];
+obj.calc = double_val;
+obj.add = add_vals;
+
+// プロパティからメソッドのように呼び出す
+print(obj.calc(10));     // 20
+print(obj.add(100, 50)); // 150
