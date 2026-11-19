@@ -54,7 +54,7 @@ fi
 
 # Detect LLVM_CONFIG
 LLVM_CONFIG=""
-for cand in llvm-config-devel llvm-config llvm-config-21 llvm-config-19 llvm-config-18; do
+for cand in llvm-config-devel llvm-config llvm-config21 llvm-config20 llvm-config19 llvm-config18 llvm-config-21 llvm-config-19 llvm-config-18; do
 	if command -v "$cand" >/dev/null 2>&1; then
 		LLVM_CONFIG="$cand"
 		break

@@ -1,3 +1,13 @@
+/*
+ * Copyright 2026 HARIMAWO
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ */
+
 #include "cpp.h"
 #include <ctype.h>
 #include <stdio.h>
@@ -1012,6 +1022,17 @@ static void process_source(CppState* const st, StrBuf* const out, char const* co
 					char* msg = trim_dup(s, line_end);
 					fprintf(stderr, "%s:%d:1: Ga! (CPP Error): #error %s\n", filename, line_num, msg);
 					free(msg);
+					exit(1);
+				} else if (dir_len == 7 && strncmp(dir_start, "warning", 7) == 0) {
+					char* msg = trim_dup(s, line_end);
+					fprintf(stderr, "%s:%d:1: Ga! (CPP Warning): #warning %s\n", filename, line_num, msg);
+					free(msg);
+				} else if (dir_len == 4 && strncmp(dir_start, "line", 4) == 0) {
+					/* #line はそのまま通すか無視 */
+				} else if (dir_len > 0 && !isdigit((unsigned char)dir_start[0])) {
+					char* dname = trim_dup(dir_start, dir_start + dir_len);
+					fprintf(stderr, "%s:%d:1: Ga! (CPP Error): Invalid preprocessing directive '#%s'\n", filename, line_num, dname);
+					free(dname);
 					exit(1);
 				}
 			}

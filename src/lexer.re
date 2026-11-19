@@ -18,6 +18,31 @@ static void update_location(char const* tok, char const* cur) {
 	}
 }
 
+static char* unescape_string(char const* const src, size_t const len) {
+	char* out = malloc(len + 1);
+	if (!out) return NULL;
+	size_t j = 0;
+	for (size_t i = 0; i < len; i++) {
+		if (src[i] == '\\' && i + 1 < len) {
+			i++;
+			switch (src[i]) {
+				case 'n': out[j++] = '\n'; break;
+				case 't': out[j++] = '\t'; break;
+				case 'r': out[j++] = '\r'; break;
+				case '0': out[j++] = '\0'; break;
+				case '\\': out[j++] = '\\'; break;
+				case '"': out[j++] = '"'; break;
+				case '\'': out[j++] = '\''; break;
+				default: out[j++] = src[i]; break;
+			}
+		} else {
+			out[j++] = src[i];
+		}
+	}
+	out[j] = '\0';
+	return out;
+}
+
 int yylex() {
     const char *marker;
 	(void)marker;
@@ -40,7 +65,7 @@ int yylex() {
         NUM = [0-9]+;
         FLOAT = [0-9]+ "." [0-9]+;
         IDENT = [a-zA-Z_][a-zA-Z0-9_]*;
-        STR = "\"" [^"\x00\n]* "\"";
+        STR = "\"" ("\\" [^\x00\n] | [^"\\\x00\n])* "\"";
         CHAR_LIT = "'" ("\\" [^\x00\n] | [^'\\\x00\n]) "'";
         REGEX = "/" [^/\x00\n]+ "/";
 
@@ -88,8 +113,8 @@ int yylex() {
         }
         STR {
             update_location(tok, cursor);
-            // 前後のダブルクォーテーションを除外して複製
-            yylval.str = strndup(tok + 1, cursor - tok - 2);
+            // 前後のダブルクォーテーションを除外してアンエスケープ
+            yylval.str = unescape_string(tok + 1, (size_t)(cursor - tok - 2));
             return T_STRING;
         }
         CHAR_LIT {
@@ -145,6 +170,7 @@ int yylex() {
         "FILE" { update_location(tok, cursor); return T_FILE; }
         "class" { update_location(tok, cursor); return T_CLASS; }
         "struct" { update_location(tok, cursor); return T_STRUCT; }
+        "union" { update_location(tok, cursor); return T_UNION; }
         "public" { update_location(tok, cursor); return T_PUBLIC; }
         "private" { update_location(tok, cursor); return T_PRIVATE; }
         ":" { update_location(tok, cursor); return T_COLON; }

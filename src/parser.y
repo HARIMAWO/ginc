@@ -22,7 +22,7 @@ static int current_access = 0;
 %token <num> T_NUM
 %token <float_val> T_FLOAT_LITERAL
 %token <str> T_IDENT T_STR T_STRING T_REGEX T_USER_TYPE
-%token T_INT_TYPE T_STR_TYPE T_VAR_TYPE T_DOUBLE_TYPE T_ASSIGN T_PLUS T_MINUS T_STAR T_SLASH T_SEMI T_PRINT T_LPAREN T_RPAREN T_IF T_ELSE T_WHILE T_LBRACE T_RBRACE T_EQ T_LT T_MATCH T_LBRACKET T_RBRACKET T_COMMA T_RETURN T_TRY T_CATCH T_THROW T_FINALLY T_DOT T_CLASS T_STRUCT T_PUBLIC T_PRIVATE T_COLON T_TRUE T_FALSE T_NULL T_VOID T_CHAR T_FILE T_AND T_OR T_NOT T_NEQ T_GT T_LE T_GE T_MOD T_AMP T_FOR T_INC T_DEC T_DO T_BREAK T_CONTINUE T_TYPEDEF T_BIT_OR_TOK T_XOR T_LSHIFT T_RSHIFT T_SWITCH T_CASE T_DEFAULT T_ADD_ASSIGN T_SUB_ASSIGN T_MUL_ASSIGN T_DIV_ASSIGN T_MOD_ASSIGN T_AND_ASSIGN T_OR_ASSIGN T_XOR_ASSIGN T_LSHIFT_ASSIGN T_RSHIFT_ASSIGN T_TILDE T_QUESTION T_CONST T_ENUM T_SHORT T_LONG T_UNSIGNED T_FLOAT_TYPE T_BOOL T_STATIC T_EXTERN T_GOTO T_SIZEOF T_ARROW T_ELLIPSIS T_VA_LIST T_VA_START T_VA_ARG T_VA_END
+%token T_INT_TYPE T_STR_TYPE T_VAR_TYPE T_DOUBLE_TYPE T_ASSIGN T_PLUS T_MINUS T_STAR T_SLASH T_SEMI T_PRINT T_LPAREN T_RPAREN T_IF T_ELSE T_WHILE T_LBRACE T_RBRACE T_EQ T_LT T_MATCH T_LBRACKET T_RBRACKET T_COMMA T_RETURN T_TRY T_CATCH T_THROW T_FINALLY T_DOT T_CLASS T_STRUCT T_UNION T_PUBLIC T_PRIVATE T_COLON T_TRUE T_FALSE T_NULL T_VOID T_CHAR T_FILE T_AND T_OR T_NOT T_NEQ T_GT T_LE T_GE T_MOD T_AMP T_FOR T_INC T_DEC T_DO T_BREAK T_CONTINUE T_TYPEDEF T_BIT_OR_TOK T_XOR T_LSHIFT T_RSHIFT T_SWITCH T_CASE T_DEFAULT T_ADD_ASSIGN T_SUB_ASSIGN T_MUL_ASSIGN T_DIV_ASSIGN T_MOD_ASSIGN T_AND_ASSIGN T_OR_ASSIGN T_XOR_ASSIGN T_LSHIFT_ASSIGN T_RSHIFT_ASSIGN T_TILDE T_QUESTION T_CONST T_ENUM T_SHORT T_LONG T_UNSIGNED T_FLOAT_TYPE T_BOOL T_STATIC T_EXTERN T_GOTO T_SIZEOF T_ARROW T_ELLIPSIS T_VA_LIST T_VA_START T_VA_ARG T_VA_END
 
 %type <ast> stmt_list stmt expr comma_expr expr_list param_list param_decl member_decl member_list class_def class_member class_item class_member_list finally_clause func_body catch_block catch_list opt_expr for_init case_list case_item opt_stmt_list case_val enum_def enum_item enum_list array2d_init_row array2d_init_list fn_ptr_param fn_ptr_param_list
 %type <ginc_type> ext_type
@@ -289,6 +289,10 @@ class_def:
         $$ = make_class_def_node($2, $5);
         current_class[0] = '\0';
     }
+    | T_UNION T_IDENT { strcpy(current_class, $2); current_access = 1; } T_LBRACE class_member_list T_RBRACE T_SEMI {
+        $$ = make_class_def_node($2, $5);
+        current_class[0] = '\0';
+    }
     ;
 
 finally_clause:
@@ -462,6 +466,9 @@ stmt:
         $$ = make_class_var_decl_node($2, $3);
     }
     | T_STRUCT T_IDENT T_IDENT T_SEMI {
+        $$ = make_class_var_decl_node($2, $3);
+    }
+    | T_UNION T_IDENT T_IDENT T_SEMI {
         $$ = make_class_var_decl_node($2, $3);
     }
     | T_INT_TYPE T_IDENT T_LBRACKET T_STR_TYPE T_RBRACKET T_SEMI {

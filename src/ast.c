@@ -1,3 +1,13 @@
+/*
+ * Copyright 2026 HARIMAWO
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -288,7 +298,7 @@ static char const* const reserved_keywords[] = {
 	"if", "else", "while", "do", "for", "break", "continue",
 	"switch", "case", "default",
 	"return", "try", "catch", "throw", "finally",
-	"class", "struct", "public", "private", "print",
+	"class", "struct", "union", "public", "private", "print",
 	"true", "false", "null", "typedef", "const", "static", "extern", "enum", "goto", "sizeof",
 	"va_list", "va_start", "va_arg", "va_end", NULL
 };
